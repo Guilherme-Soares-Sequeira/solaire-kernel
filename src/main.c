@@ -250,13 +250,11 @@ void end_cycle(void) {
 
 void end_process(void) {
     // TODO: call disable_interrupts() here
-    // TODO: fix wrong enum
     if (tcb_vec[idx_exe].criticality == TASK_CRIT_HARD) {
         insert(idx_exe, &idx_zombie);
     } else {
         tcb_vec[idx_exe].state = TASK_STATE_FREE;
 
-        // TODO: incompatible pointer type
         insert(idx_exe, &idx_freetcb);
     }
 
@@ -273,7 +271,6 @@ void kill(uint32_t idx_task) {
         return;
     }
 
-    // TODO: fix this error, the switch doesn't handle all possible enum values
     switch (tcb_vec[idx_exe].state) {
     case TASK_STATE_READY:
         extract(idx_task, &idx_ready);
@@ -302,13 +299,13 @@ uint32_t create(char name[MAX_STR_LEN + 1], uint32_t (*addr)(), task_type type,
     // TODO: call enable_interrupts() here
 
     idx_task = getfirst(
-        &idx_freetcb); // TODO: fix this error, incompatible pointer type
+        &idx_freetcb); 
     if (idx_task == NIL) {
         return KERNEL_STATE_NO_TCB;
     }
 
     if (tcb_vec[idx_task].criticality ==
-        TASK_CRIT_HARD) { // TODO: fix this error, different enums
+        TASK_CRIT_HARD) {  
         if (!guarantee(idx_task)) {
             return KERNEL_STATE_NO_GUARANTEE;
         }
@@ -323,7 +320,7 @@ uint32_t create(char name[MAX_STR_LEN + 1], uint32_t (*addr)(), task_type type,
     tcb_vec[idx_task].utilf = wcet / period;
     tcb_vec[idx_task].priority = (uint32_t)period;
     tcb_vec[idx_task].dline =
-        /* TODO: MAX_LONG + */ (long)(period - PRIORITY_LEVELS);
+    /* TODO: MAX_LONG + */ (long)(period - PRIORITY_LEVELS);
 
     // TODO: enable CPU interrupts
 
