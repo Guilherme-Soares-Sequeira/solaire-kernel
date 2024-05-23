@@ -6,18 +6,19 @@
 
 TCB tcb_vec[MAX_TASKS];
 
-unsigned int idx_exe;     /* index to the executing process     */
-unsigned int idx_ready;   /* index to head of ready tasks queue */
-unsigned int idx_idle;    /* index to head of idle queue        */
-unsigned int idx_zombie;  /* index to head of zombie queue      */
-unsigned int idx_freetcb; /* index to head of free TCB queue    */
+uint32_t idx_exe;     /* index to the executing process     */
+uint32_t idx_ready;   /* index to head of ready tasks queue */
+uint32_t idx_idle;    /* index to head of idle queue        */
+uint32_t idx_zombie;  /* index to head of zombie queue      */
+uint32_t idx_freetcb; /* index to head of free TCB queue    */
 
-unsigned long sys_clock; /* system's clock                     */
+unsigned long sys_clock; /* system's clock                      */
 
 float time_unit; /* time unit used for timer ticks     */
 float util_fact; /* cpu utilization factor             */
 
-void t0(void) { return; }
+void schedule(void);
+void dispatch(void);
 
 void reset_timer1_control_registers() {
     TCCR1A = 0;
@@ -67,15 +68,17 @@ int sched_init(void) {
     disable_interrupts();
     set_timer_registers();
     enable_interrupts();
+
+    return 0;
 }
 
-void insert(uint32_t idx_task, uint32_t *que) {
+void insert(uint32_t idx_task, uint32_t *queue) {
     long deadline;
     uint32_t prev_tcb;
     uint32_t next_tcb;
 
     prev_tcb = NIL;
-    next_tcb = *que;
+    next_tcb = *queue;
     deadline = tcb_vec[idx_task].dline;
 
     while ((next_tcb != NIL) && (deadline >= tcb_vec[next_tcb].dline)) {
@@ -86,7 +89,7 @@ void insert(uint32_t idx_task, uint32_t *que) {
     if (prev_tcb != NIL) {
         tcb_vec[prev_tcb].next = idx_task;
     } else {
-        *que = idx_task;
+        *queue = idx_task;
     }
 
     if (next_tcb != NIL) {
@@ -97,7 +100,7 @@ void insert(uint32_t idx_task, uint32_t *que) {
     tcb_vec[idx_task].next = next_tcb;
 }
 
-uint32_t extract(uint32_t idx_task, uint32_t *que) {
+uint32_t extract(uint32_t idx_task, uint32_t *queue) {
     uint32_t prev_tcb;
     uint32_t next_tcb;
 
@@ -105,7 +108,7 @@ uint32_t extract(uint32_t idx_task, uint32_t *que) {
     next_tcb = tcb_vec[idx_task].next;
 
     if (prev_tcb == NIL) {
-        *que = next_tcb;
+        *queue = next_tcb;
     } else {
         tcb_vec[prev_tcb].next = tcb_vec[idx_task].next;
     }
@@ -117,17 +120,17 @@ uint32_t extract(uint32_t idx_task, uint32_t *que) {
     return idx_task;
 }
 
-uint32_t getfirst(uint32_t *que) {
+uint32_t getfirst(uint32_t *queue) {
     uint32_t head;
 
-    head = *que;
+    head = *queue;
 
     if (head == NIL) {
         return NIL;
     }
 
-    *que = tcb_vec[head].next;
-    tcb_vec[*que].prev = NIL;
+    *queue = tcb_vec[head].next;
+    tcb_vec[*queue].prev = NIL;
 
     return head;
 }
@@ -154,7 +157,7 @@ kernel_state wake_up(void) {
         return KERNEL_STATE_TIME_EXPIRED;
     }
 
-    if (tcb_vec[idx_exe].type == TASK_CRIT_HARD) {
+    if (tcb_vec[idx_exe].criticality == TASK_CRIT_HARD) {
         if (sys_clock > tcb_vec[idx_exe].dline) {
             return KERNEL_STATE_TIME_OVERFLOW;
         }
@@ -177,10 +180,13 @@ kernel_state wake_up(void) {
     }
 
     if (count > 0) {
-        schedule();
+        schedule(); // TODO: this function needs to be renamed
     }
 
     // TODO: call load_ctx() here
+    
+    // TODO: check if this is correct
+    return KERNEL_STATE_OK;
 }
 
 uint32_t guarantee(uint32_t idx_task) {
@@ -195,9 +201,9 @@ uint32_t guarantee(uint32_t idx_task) {
     return TRUE;
 }
 
-uint32_t activate(uint32_t idx_task) {
+void activate(uint32_t idx_task) {
     // TODO: call save_ctx() here
-    if (tcb_vec[idx_task].type == TASK_CRIT_HARD) {
+    if (tcb_vec[idx_task].criticality == TASK_CRIT_HARD) {
         tcb_vec[idx_task].dline = sys_clock + (long)tcb_vec[idx_task].period;
     }
 
@@ -205,7 +211,6 @@ uint32_t activate(uint32_t idx_task) {
 
     insert(idx_task, &idx_ready);
 
-    schedule();
     // TODO: call load_ctx() here
 }
 
@@ -245,11 +250,13 @@ void end_cycle(void) {
 
 void end_process(void) {
     // TODO: call disable_interrupts() here
-    if (tcb_vec[idx_exe].type == TASK_CRIT_HARD) {
+    // TODO: fix wrong enum
+    if (tcb_vec[idx_exe].criticality == TASK_CRIT_HARD) {
         insert(idx_exe, &idx_zombie);
     } else {
         tcb_vec[idx_exe].state = TASK_STATE_FREE;
 
+        // TODO: incompatible pointer type
         insert(idx_exe, &idx_freetcb);
     }
 
@@ -266,6 +273,7 @@ void kill(uint32_t idx_task) {
         return;
     }
 
+    // TODO: fix this error, the switch doesn't handle all possible enum values
     switch (tcb_vec[idx_exe].state) {
     case TASK_STATE_READY:
         extract(idx_task, &idx_ready);
@@ -273,9 +281,11 @@ void kill(uint32_t idx_task) {
     case TASK_STATE_IDLE:
         extract(idx_task, &idx_idle);
         break;
+    default:
+        break;
     }
 
-    if (tcb_vec[idx_task].type == TASK_CRIT_HARD) {
+    if (tcb_vec[idx_task].criticality == TASK_CRIT_HARD) {
         insert(idx_task, &idx_zombie);
     } else {
         tcb_vec[idx_task].state = TASK_STATE_FREE;
@@ -291,12 +301,14 @@ uint32_t create(char name[MAX_STR_LEN + 1], uint32_t (*addr)(), task_type type,
 
     // TODO: call enable_interrupts() here
 
-    idx_task = getfirst(&idx_freetcb);
+    idx_task = getfirst(
+        &idx_freetcb); // TODO: fix this error, incompatible pointer type
     if (idx_task == NIL) {
         return KERNEL_STATE_NO_TCB;
     }
 
-    if (tcb_vec[idx_task].type == TASK_CRIT_HARD) {
+    if (tcb_vec[idx_task].criticality ==
+        TASK_CRIT_HARD) { // TODO: fix this error, different enums
         if (!guarantee(idx_task)) {
             return KERNEL_STATE_NO_GUARANTEE;
         }
@@ -318,10 +330,7 @@ uint32_t create(char name[MAX_STR_LEN + 1], uint32_t (*addr)(), task_type type,
     return idx_task;
 }
 
-void dispatch(void) {
-    idx_exe = getfirst(&idx_ready);
-    tcb_vec[idx_exe].state = TASK_STATE_EXE;
-}
+void dispatch(void) { tcb_vec[idx_exe].state = TASK_STATE_EXE; }
 
 void schedule(void) {
     if (firstdline(idx_ready) < tcb_vec[idx_exe].dline) {
@@ -337,7 +346,7 @@ void schedule(void) {
  *
  * @param tick
  */
-void init(float tick) {
+void init_system(float tick) {
     time_unit = tick;
 
     for (unsigned int task_index = 0; task_index < MAX_TASKS - 1;
@@ -359,7 +368,7 @@ void init(float tick) {
 // void loop() { schedDsipatch(); }
 
 int main() {
-    init(TICK_DURATION_MS);
+    init_system(TICK_DURATION_MS);
 
     return EXIT_SUCCESS;
 }
