@@ -1,8 +1,12 @@
 #include <Arduino.h>
+#include <avr/interrupt.h>
+#include <avr/io.h>
 #include <stdlib.h>
+#include <util/delay.h>
 
 #include "include/remaps.h"
 #include "include/task.h"
+#include "include/util.h"
 
 TCB tcb_vec[MAX_TASKS];
 
@@ -16,6 +20,8 @@ int64_t sys_clock; /* system's clock                      */
 
 float time_unit; /* time unit used for timer ticks     */
 float util_fact; /* cpu utilization factor             */
+
+bool volatile tf = true;
 
 void schedule(void);
 void dispatch(void);
@@ -54,22 +60,24 @@ void set_interrupt_period(float tick_delay) {
 
 void set_timer_registers() {
     reset_timer1_control_registers();
+    
     reset_timer1_counting_register();
+    
     set_timer1_ctc_mode();
-
+     
     set_timer1_prescaler_256();
 
     set_timer1_interrupt_on_compare_match_A();
-
+     
     set_interrupt_period(TICK_DURATION_MS);
 }
 
-int sched_init(void) {
+void init_hardware(void) {
     disable_interrupts();
-    set_timer_registers();
-    enable_interrupts();
 
-    return 0;
+    set_timer_registers();
+
+    enable_interrupts();
 }
 
 void insert(int32_t idx_task, int32_t *queue) {
@@ -99,7 +107,6 @@ void insert(int32_t idx_task, int32_t *queue) {
     tcb_vec[idx_task].prev = prev_tcb;
     tcb_vec[idx_task].next = next_tcb;
 }
-
 
 int32_t extract(int32_t idx_task, int32_t *queue) {
     int32_t prev_tcb;
@@ -185,7 +192,7 @@ kernel_state wake_up(void) {
     }
 
     // TODO: call load_ctx() here
-    
+
     // TODO: check if this is correct
     return KERNEL_STATE_OK;
 }
@@ -293,20 +300,18 @@ void kill(int32_t idx_task) {
     // TODO: call disable_interrupts() here
 }
 
-int32_t create(char name[MAX_STR_LEN + 1], int32_t (*addr)(), task_type type,
-                float period, float wcet) {
+int32_t create(const char name[MAX_STR_LEN + 1], int32_t (*addr)(),
+               task_type type, float period, float wcet) {
     int32_t idx_task;
 
     // TODO: call enable_interrupts() here
 
-    idx_task = getfirst(
-        &idx_freetcb); 
+    idx_task = getfirst(&idx_freetcb);
     if (idx_task == NIL) {
         return KERNEL_STATE_NO_TCB;
     }
 
-    if (tcb_vec[idx_task].criticality ==
-        TASK_CRIT_HARD) {  
+    if (tcb_vec[idx_task].criticality == TASK_CRIT_HARD) {
         if (!guarantee(idx_task)) {
             return KERNEL_STATE_NO_GUARANTEE;
         }
@@ -321,14 +326,24 @@ int32_t create(char name[MAX_STR_LEN + 1], int32_t (*addr)(), task_type type,
     tcb_vec[idx_task].utilf = wcet / period;
     tcb_vec[idx_task].priority = (int32_t)period;
     tcb_vec[idx_task].dline =
-    /* TODO: MAX_int64_t + */ (int64_t)(period - PRIORITY_LEVELS);
+        /* TODO: MAX_int64_t + */ (int64_t)(period - PRIORITY_LEVELS);
 
     // TODO: enable CPU interrupts
 
     return idx_task;
 }
 
-void dispatch(void) { tcb_vec[idx_exe].state = TASK_STATE_EXE; }
+void dispatch(void) {
+    idx_exe = getfirst(&idx_ready);
+
+    if (idx_exe != NIL) {
+        tcb_vec[idx_exe].state = TASK_STATE_EXE;
+        Serial.print("Dispatching task: ");
+        Serial.println(idx_exe);
+    } else {
+        Serial.println("No task to dispatch");
+    }
+}
 
 void schedule(void) {
     if (firstdline(idx_ready) < tcb_vec[idx_exe].dline) {
@@ -361,20 +376,23 @@ void init_system(float tick) {
     util_fact = 0.0f;
 }
 
-// ISR(TIMER1_COMPA_vect) { schedSchedule(); }
+ISR(TIMER1_COMPA_vect) {
 
-// void loop() { schedDsipatch(); }
+}
 
 int main() {
-    init_system(TICK_DURATION_MS);
-
+    // Set the BAUD rate
     Serial.begin(9600);
-    
-    Serial.println("Hello, world!");
-    Serial.flush();
 
-    Serial.println("I'm still printing things...");
-    Serial.flush();
+    // Initialize Arduino's hardware
+    log("Initializing hardware", LOG_FD_STDOUT);
+    init_hardware();
+    log("Success!", LOG_FD_STDERR);
+
+    // Initialize the Kernel
+    log("Initializing kernel", LOG_FD_STDOUT);
+    init_system(TICK_DURATION_MS);
+    log("Success!", LOG_FD_STDOUT);
 
     return EXIT_SUCCESS;
 }

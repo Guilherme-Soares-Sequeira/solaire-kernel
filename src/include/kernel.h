@@ -4,7 +4,7 @@
 /* clang-format off */
 
 #define MAX_STR_LEN      16
-#define MAX_TASKS        32
+#define MAX_TASKS        8
 #define MAX_DLINE        0x7FFFFFFF
 #define PRIORITY_LEVELS  255
 #define TICK_DURATION_MS 5.0

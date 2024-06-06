@@ -50,11 +50,8 @@ typedef struct {
   int32_t prev;              /* pointer to the previous TCB    */
 } TCB;
 
-void t0(void) { while(TRUE);; }
-void t1(void) { while(TRUE);; }
-void t2(void) { while(TRUE);; }
-void t3(void) { while(TRUE);; }
-void t4(void) { while(TRUE);; }
-void t5(void) { while(TRUE);; }
+int32_t t1(void) { while(TRUE) { Serial.print("AaaaaaA"); } return 1; }
+int32_t t2(void) { while(TRUE) { Serial.print("BbbbbbbbbB"); } return 1; }
+int32_t t3(void) { while(TRUE) { Serial.print("CcC"); } return 1; }
 
 #endif // TASK_H
