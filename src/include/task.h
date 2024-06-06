@@ -30,7 +30,7 @@ typedef enum {
 typedef struct {
   char name[MAX_STR_LEN + 1]; /* task name                      */
   
-  uint32_t (*addr)();         /* first instruction address      */
+  int32_t (*addr)();         /* first instruction address      */
   
   task_type type;             /* task type                      */
   task_state state;           /* task state                     */
@@ -38,16 +38,16 @@ typedef struct {
   
   long dline;                 /* task absolute deadline         */
   
-  uint32_t period;            /* task period                    */
-  uint32_t priority;          /* task priority                  */
-  uint32_t wcet;              /* task worst-case execution time */
+  int32_t period;            /* task period                    */
+  int32_t priority;          /* task priority                  */
+  int32_t wcet;              /* task worst-case execution time */
   
   float utilf;                /* task utilization factor        */
   
   int32_t *ctx;               /* pointer to the task's context  */
   
-  uint32_t next;              /* pointer to the next TCB        */
-  uint32_t prev;              /* pointer to the previous TCB    */
+  int32_t next;              /* pointer to the next TCB        */
+  int32_t prev;              /* pointer to the previous TCB    */
 } TCB;
 
 void t0(void) { while(TRUE);; }

@@ -6,13 +6,13 @@
 
 TCB tcb_vec[MAX_TASKS];
 
-uint32_t idx_exe;     /* index to the executing process     */
-uint32_t idx_ready;   /* index to head of ready tasks queue */
-uint32_t idx_idle;    /* index to head of idle queue        */
-uint32_t idx_zombie;  /* index to head of zombie queue      */
-uint32_t idx_freetcb; /* index to head of free TCB queue    */
+int32_t idx_exe;     /* index to the executing process     */
+int32_t idx_ready;   /* index to head of ready tasks queue */
+int32_t idx_idle;    /* index to head of idle queue        */
+int32_t idx_zombie;  /* index to head of zombie queue      */
+int32_t idx_freetcb; /* index to head of free TCB queue    */
 
-unsigned long sys_clock; /* system's clock                      */
+int64_t sys_clock; /* system's clock                      */
 
 float time_unit; /* time unit used for timer ticks     */
 float util_fact; /* cpu utilization factor             */
@@ -72,10 +72,10 @@ int sched_init(void) {
     return 0;
 }
 
-void insert(uint32_t idx_task, uint32_t *queue) {
-    long deadline;
-    uint32_t prev_tcb;
-    uint32_t next_tcb;
+void insert(int32_t idx_task, int32_t *queue) {
+    int64_t deadline;
+    int32_t prev_tcb;
+    int32_t next_tcb;
 
     prev_tcb = NIL;
     next_tcb = *queue;
@@ -101,9 +101,9 @@ void insert(uint32_t idx_task, uint32_t *queue) {
 }
 
 
-uint32_t extract(uint32_t idx_task, uint32_t *queue) {
-    uint32_t prev_tcb;
-    uint32_t next_tcb;
+int32_t extract(int32_t idx_task, int32_t *queue) {
+    int32_t prev_tcb;
+    int32_t next_tcb;
 
     prev_tcb = tcb_vec[idx_task].prev;
     next_tcb = tcb_vec[idx_task].next;
@@ -121,8 +121,8 @@ uint32_t extract(uint32_t idx_task, uint32_t *queue) {
     return idx_task;
 }
 
-uint32_t getfirst(uint32_t *queue) {
-    uint32_t head;
+int32_t getfirst(int32_t *queue) {
+    int32_t head;
 
     head = *queue;
 
@@ -136,9 +136,9 @@ uint32_t getfirst(uint32_t *queue) {
     return head;
 }
 
-long firstdline(uint32_t head) { return tcb_vec[head].dline; }
+int64_t firstdline(int32_t head) { return tcb_vec[head].dline; }
 
-uint32_t empty(uint32_t head) {
+int32_t empty(int32_t head) {
     // TODO: this is probably very stupid, need to change later
     if (head == NIL) {
         return TRUE;
@@ -148,8 +148,8 @@ uint32_t empty(uint32_t head) {
 }
 
 kernel_state wake_up(void) {
-    uint32_t count = 0;
-    uint32_t idx_task;
+    int32_t count = 0;
+    int32_t idx_task;
 
     // TODO: call save_ctx() here
     sys_clock++;
@@ -174,7 +174,7 @@ kernel_state wake_up(void) {
 
     while (!empty(idx_idle) && (firstdline(idx_idle) <= sys_clock)) {
         idx_task = getfirst(&idx_idle);
-        tcb_vec[idx_task].dline += (long)tcb_vec[idx_task].period;
+        tcb_vec[idx_task].dline += (int64_t)tcb_vec[idx_task].period;
         tcb_vec[idx_task].state = TASK_STATE_READY;
         insert(idx_task, &idx_ready);
         count++;
@@ -190,7 +190,7 @@ kernel_state wake_up(void) {
     return KERNEL_STATE_OK;
 }
 
-uint32_t guarantee(uint32_t idx_task) {
+int32_t guarantee(int32_t idx_task) {
     util_fact += tcb_vec[idx_task].utilf;
 
     if (util_fact > 1.0) {
@@ -202,10 +202,10 @@ uint32_t guarantee(uint32_t idx_task) {
     return TRUE;
 }
 
-void activate(uint32_t idx_task) {
+void activate(int32_t idx_task) {
     // TODO: call save_ctx() here
     if (tcb_vec[idx_task].criticality == TASK_CRIT_HARD) {
-        tcb_vec[idx_task].dline = sys_clock + (long)tcb_vec[idx_task].period;
+        tcb_vec[idx_task].dline = sys_clock + (int64_t)tcb_vec[idx_task].period;
     }
 
     tcb_vec[idx_task].state = TASK_STATE_READY;
@@ -225,7 +225,7 @@ void sleep(void) {
 }
 
 void end_cycle(void) {
-    long deadline;
+    int64_t deadline;
 
     // TODO: call save_ctx() here
 
@@ -236,7 +236,7 @@ void end_cycle(void) {
 
         insert(idx_exe, &idx_idle);
     } else {
-        deadline += (long)tcb_vec[idx_exe].period;
+        deadline += (int64_t)tcb_vec[idx_exe].period;
 
         tcb_vec[idx_exe].dline = deadline;
         tcb_vec[idx_exe].state = TASK_STATE_READY;
@@ -264,7 +264,7 @@ void end_process(void) {
     // TODO: call load_ctx() here
 }
 
-void kill(uint32_t idx_task) {
+void kill(int32_t idx_task) {
     // TODO: call enable_interrupts() here
     if (idx_exe == idx_task) {
         end_process();
@@ -293,9 +293,9 @@ void kill(uint32_t idx_task) {
     // TODO: call disable_interrupts() here
 }
 
-uint32_t create(char name[MAX_STR_LEN + 1], uint32_t (*addr)(), task_type type,
+int32_t create(char name[MAX_STR_LEN + 1], int32_t (*addr)(), task_type type,
                 float period, float wcet) {
-    uint32_t idx_task;
+    int32_t idx_task;
 
     // TODO: call enable_interrupts() here
 
@@ -316,12 +316,12 @@ uint32_t create(char name[MAX_STR_LEN + 1], uint32_t (*addr)(), task_type type,
     tcb_vec[idx_task].addr = addr;
     tcb_vec[idx_task].type = type;
     tcb_vec[idx_task].state = TASK_STATE_SLEEP;
-    tcb_vec[idx_task].period = (uint32_t)(period / time_unit);
+    tcb_vec[idx_task].period = (int32_t)(period / time_unit);
     tcb_vec[idx_task].wcet = wcet;
     tcb_vec[idx_task].utilf = wcet / period;
-    tcb_vec[idx_task].priority = (uint32_t)period;
+    tcb_vec[idx_task].priority = (int32_t)period;
     tcb_vec[idx_task].dline =
-    /* TODO: MAX_LONG + */ (long)(period - PRIORITY_LEVELS);
+    /* TODO: MAX_int64_t + */ (int64_t)(period - PRIORITY_LEVELS);
 
     // TODO: enable CPU interrupts
 
