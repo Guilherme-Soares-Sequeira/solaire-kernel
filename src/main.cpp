@@ -100,6 +100,7 @@ void insert(uint32_t idx_task, uint32_t *queue) {
     tcb_vec[idx_task].next = next_tcb;
 }
 
+
 uint32_t extract(uint32_t idx_task, uint32_t *queue) {
     uint32_t prev_tcb;
     uint32_t next_tcb;
@@ -366,6 +367,14 @@ void init_system(float tick) {
 
 int main() {
     init_system(TICK_DURATION_MS);
+
+    Serial.begin(9600);
+    
+    Serial.println("Hello, world!");
+    Serial.flush();
+
+    Serial.println("I'm still printing things...");
+    Serial.flush();
 
     return EXIT_SUCCESS;
 }
