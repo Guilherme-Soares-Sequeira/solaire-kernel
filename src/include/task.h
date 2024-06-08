@@ -2,10 +2,23 @@
 #define TASK_H
 
 #include <stdint.h>
+#include <Arduino.h>
 
 #include "misc.h"
 
 #define MAX_STR_LEN 16
+
+#define TASK1_NAME "Task 1"
+#define TASK2_NAME "Task 2"
+#define TASK3_NAME "Task 3"
+
+#define TASK1_PERIOD  50.0
+#define TASK2_PERIOD 100.0
+#define TASK3_PERIOD 150.0
+
+#define TASK1_WCET 25.0
+#define TASK2_WCET 25.0
+#define TASK3_WCET 25.0
 
 typedef enum {
     TASK_TYPE_PERIODIC = 0,
@@ -28,7 +41,7 @@ typedef enum { TASK_CRIT_HARD = 1, TASK_CRIT_NRT = 2 } task_crit;
 typedef struct {
     char name[MAX_STR_LEN + 1]; /* task name                      */
 
-    int16_t (*addr)(); /* first instruction address */
+    void (*addr)(); /* first instruction address */
 
     task_type type;        /* task type                      */
     task_state state;      /* task state                     */
@@ -42,10 +55,12 @@ typedef struct {
 
     float utilf;      /* task utilization factor                  */
 
-    void *stack_ptr;  /* pointer to the task's stack */
+    uint8_t* stack_ptr; /* pointer to the task's stack */
 
     int16_t next; /* pointer to the next TCB     */
     int16_t prev; /* pointer to the previous TCB */
 } TCB;
+
+uint8_t* init_task_stack(void *stack_ptr, void (*addr)());
 
 #endif // TASK_H

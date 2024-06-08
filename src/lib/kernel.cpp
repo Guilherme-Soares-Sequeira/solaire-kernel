@@ -4,6 +4,7 @@
 #include "include/timer.h"
 #include "include/util.h"
 #include "include/remaps.h"
+#include "include/context.h"
 
 #define STACK_SIZE 128 // stack size in bytes
 
@@ -17,13 +18,11 @@ int16_t idx_idle;    /* index to head of idle queue        */
 int16_t idx_zombie;  /* index to head of zombie queue      */
 int16_t idx_freetcb; /* index to head of free TCB queue    */
 
+volatile void* volatile stack_exe;
+
 int32_t sys_clock; /* system's clock, number of ticks since system initialization */
 float time_unit; /* time unit used for timer ticks */
 float util_fact; /* cpu utilization factor         */
-
-int16_t fn() {
-    return 1;
-}
 
 void insert(int16_t idx_task, int16_t *queue) {
     int32_t deadline;
@@ -102,8 +101,7 @@ int16_t empty(int16_t head) {
 kernel_state wake_up(void) {
     int16_t count = 0;
     int16_t idx_task;
-
-    // TODO: call save_ctx() here
+    
     sys_clock++;
 
     if (sys_clock >= LIFETIME) {
@@ -138,8 +136,6 @@ kernel_state wake_up(void) {
         schedule();
     }
 
-    // TODO: call load_ctx() here
-
     return KERNEL_STATE_OK;
 }
 
@@ -156,7 +152,6 @@ int16_t guarantee(int16_t idx_task) {
 }
 
 void activate(int16_t idx_task) {
-    // TODO: call save_ctx() here
     if (tcb_vec[idx_task].criticality == TASK_CRIT_HARD) {
         tcb_vec[idx_task].dline = sys_clock + (int32_t)tcb_vec[idx_task].period;
     }
@@ -164,23 +159,16 @@ void activate(int16_t idx_task) {
     tcb_vec[idx_task].state = TASK_STATE_READY;
 
     insert(idx_task, &idx_ready);
-
-    // TODO: call load_ctx() here
 }
 
 void sleep(void) {
-    // TODO: call save_ctx() here
     tcb_vec[idx_exe].state = TASK_STATE_SLEEP;
 
     dispatch();
-
-    // TODO: call load_ctx() here
 }
 
 void end_cycle(void) {
     int32_t deadline;
-
-    // TODO: call save_ctx() here
 
     deadline = tcb_vec[idx_exe].dline;
 
@@ -197,9 +185,7 @@ void end_cycle(void) {
         insert(idx_exe, &idx_ready);
     }
 
-    // dispatch();
-
-    // TODO: call load_ctx() here
+    dispatch();
 }
 
 void end_process(void) {
@@ -249,11 +235,8 @@ void kill(int16_t idx_task) {
     enable_interrupts();    
 }
 
-int16_t create(const char name[MAX_STR_LEN + 1], int16_t (*addr)(),
+int16_t create(const char name[MAX_STR_LEN + 1], void (*addr)(),
                task_type type, float period, float wcet) {
-    
-    solaire_log("Create was called!", LOG_FD_STDOUT);
- 
     int16_t idx_task = 0;
     
     idx_task = getfirst(&idx_freetcb);
@@ -294,6 +277,7 @@ void dispatch(void) {
 void schedule(void) {
     if (firstdline(idx_ready) < tcb_vec[idx_exe].dline) {
         tcb_vec[idx_exe].state = TASK_STATE_READY;
+        tcb_vec[idx_exe].stack_ptr = (uint8_t*) stack_exe;
 
         insert(idx_exe, &idx_ready);
 
@@ -301,17 +285,14 @@ void schedule(void) {
     }
 }
 
-int16_t init_kernel(float tick, int16_t (*task_main)(void)) {
-    solaire_log("init_kernel was called", LOG_FD_STDOUT);
-    
+int16_t init_kernel(float tick, void (*task_main)(void)) {
     time_unit = tick;
 
     for (unsigned int task_index = 0; task_index < MAX_TASKS - 1;
          task_index++) {
         tcb_vec[task_index].next = task_index + 1;
-        tcb_vec[task_index].stack_ptr = (void*) (stack_vec + task_index * STACK_SIZE);
+        tcb_vec[task_index].stack_ptr = (stack_vec + task_index * STACK_SIZE);
     }
-    
     
     tcb_vec[MAX_TASKS - 1].next = NIL;
 
@@ -321,10 +302,10 @@ int16_t init_kernel(float tick, int16_t (*task_main)(void)) {
     idx_freetcb = 0;
     util_fact = 0.0f;
     
-    solaire_log("Creating main task...", LOG_FD_STDOUT);
-    int16_t idx_main = create("main", task_main, TASK_TYPE_APERIODIC, 100, 100);
-    solaire_log("Main task was created successfully!", LOG_FD_STDERR);
-    
+    solaire_log("Creating the main task in init_kernel...", LOG_FD_STDOUT);
+
+    int16_t idx_main = create("main", task_main, TASK_TYPE_APERIODIC, 10000.0, 10000.0);
+
     if (idx_main != EXIT_SUCCESS) {
         solaire_log("Error while initializing main task!", LOG_FD_STDERR);
 
@@ -332,6 +313,6 @@ int16_t init_kernel(float tick, int16_t (*task_main)(void)) {
     }
     
     tcb_vec[idx_main].state = TASK_STATE_EXE;
-    
+
     return EXIT_SUCCESS;
 }

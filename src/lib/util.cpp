@@ -1,5 +1,7 @@
 #include "include/util.h"
 
+#include <Arduino.h>
+
 void solaire_log(const char *str, log_fd fd) {
     const char *prefix;
 

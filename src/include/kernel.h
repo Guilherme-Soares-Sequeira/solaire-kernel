@@ -23,8 +23,6 @@ typedef enum {
 /* clang-format on */
 
 
-int16_t fn();
-
 void insert(int16_t idx_task, int16_t *queue);
 
 int16_t extract(int16_t idx_task, int16_t *queue);
@@ -49,13 +47,13 @@ void end_process(void);
 
 void kill(int16_t idx_task);
 
-int16_t create(const char name[MAX_STR_LEN + 1], int16_t (*addr)(),
+int16_t create(const char name[MAX_STR_LEN + 1], void (*addr)(),
                task_type type, float period, float wcet);
 
 void dispatch(void);
 
 void schedule(void);
 
-int16_t init_kernel(float tick, int16_t (*task_main)(void));
+int16_t init_kernel(float tick, void (*task_main)(void));
 
 #endif // KERNEL_H

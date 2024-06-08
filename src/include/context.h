@@ -1,7 +1,7 @@
 #ifndef _CONTEXT_H
 #define _CONTEXT_H
 
-#define port_save_ctx()                                                        \
+#define save_ctx()                                                        \
     asm volatile("push r0                   \n\t"                              \
                  "in r0, __SREG__           \n\t"                              \
                  "cli                       \n\t"                              \
@@ -37,17 +37,17 @@
                  "push r29                  \n\t"                              \
                  "push r30                  \n\t"                              \
                  "push r31                  \n\t"                              \
-                 "lds r26, curr_stack       \n\t"                              \
-                 "lds r27, curr_stack + 1   \n\t"                              \
+                 "lds r26, stack_exe        \n\t"                              \
+                 "lds r27, stack_exe + 1    \n\t"                              \
                  "in r0, __SP_L__           \n\t"                              \
                  "st x+, r0                 \n\t"                              \
                  "in r0, __SP_H__           \n\t"                              \
                  "st x+, r0                 \n\t"                              \
                  );
 
-#define port_restore_ctx()                                                     \
-    asm volatile("lds r26, curr_stack       \n\t"                              \
-                 "lds r27, curr_stack + 1   \n\t"                              \
+#define restore_ctx()                                                     \
+    asm volatile("lds r26, stack_exe        \n\t"                              \
+                 "lds r27, stack_exe + 1    \n\t"                              \
                  "ld r28, x+                \n\t"                              \
                  "out __SP_L__, r28         \n\t"                              \
                  "ld r29, x+                \n\t"                              \

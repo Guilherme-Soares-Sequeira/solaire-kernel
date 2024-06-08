@@ -1,8 +1,6 @@
 #ifndef UTIL_H
 #define UTIL_H
 
-#include <Arduino.h>
-
 #define MAX_MSG_SIZE 512
 
 typedef enum {
