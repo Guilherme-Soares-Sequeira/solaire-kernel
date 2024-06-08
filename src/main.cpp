@@ -8,15 +8,17 @@
 #include "include/task.h"
 #include "include/util.h"
 
+#define BAUD_RATE 115200
+
 TCB tcb_vec[MAX_TASKS];
 
-int32_t idx_exe;     /* index to the executing process     */
-int32_t idx_ready;   /* index to head of ready tasks queue */
-int32_t idx_idle;    /* index to head of idle queue        */
-int32_t idx_zombie;  /* index to head of zombie queue      */
-int32_t idx_freetcb; /* index to head of free TCB queue    */
+int16_t idx_exe;     /* index to the executing process     */
+int16_t idx_ready;   /* index to head of ready tasks queue */
+int16_t idx_idle;    /* index to head of idle queue        */
+int16_t idx_zombie;  /* index to head of zombie queue      */
+int16_t idx_freetcb; /* index to head of free TCB queue    */
 
-int64_t sys_clock; /* system's clock                      */
+int32_t sys_clock; /* system's clock                      */
 
 float time_unit; /* time unit used for timer ticks     */
 float util_fact; /* cpu utilization factor             */
@@ -80,10 +82,10 @@ void init_hardware(void) {
     enable_interrupts();
 }
 
-void insert(int32_t idx_task, int32_t *queue) {
-    int64_t deadline;
-    int32_t prev_tcb;
-    int32_t next_tcb;
+void insert(int16_t idx_task, int16_t *queue) {
+    int32_t deadline;
+    int16_t prev_tcb;
+    int16_t next_tcb;
 
     prev_tcb = NIL;
     next_tcb = *queue;
@@ -108,9 +110,9 @@ void insert(int32_t idx_task, int32_t *queue) {
     tcb_vec[idx_task].next = next_tcb;
 }
 
-int32_t extract(int32_t idx_task, int32_t *queue) {
-    int32_t prev_tcb;
-    int32_t next_tcb;
+int16_t extract(int16_t idx_task, int16_t *queue) {
+    int16_t prev_tcb;
+    int16_t next_tcb;
 
     prev_tcb = tcb_vec[idx_task].prev;
     next_tcb = tcb_vec[idx_task].next;
@@ -128,8 +130,8 @@ int32_t extract(int32_t idx_task, int32_t *queue) {
     return idx_task;
 }
 
-int32_t getfirst(int32_t *queue) {
-    int32_t head;
+int16_t getfirst(int16_t *queue) {
+    int16_t head;
 
     head = *queue;
 
@@ -143,9 +145,9 @@ int32_t getfirst(int32_t *queue) {
     return head;
 }
 
-int64_t firstdline(int32_t head) { return tcb_vec[head].dline; }
+int32_t firstdline(int16_t head) { return tcb_vec[head].dline; }
 
-int32_t empty(int32_t head) {
+int16_t empty(int16_t head) {
     // TODO: this is probably very stupid, need to change later
     if (head == NIL) {
         return TRUE;
@@ -155,8 +157,8 @@ int32_t empty(int32_t head) {
 }
 
 kernel_state wake_up(void) {
-    int32_t count = 0;
-    int32_t idx_task;
+    int16_t count = 0;
+    int16_t idx_task;
 
     // TODO: call save_ctx() here
     sys_clock++;
@@ -181,7 +183,7 @@ kernel_state wake_up(void) {
 
     while (!empty(idx_idle) && (firstdline(idx_idle) <= sys_clock)) {
         idx_task = getfirst(&idx_idle);
-        tcb_vec[idx_task].dline += (int64_t)tcb_vec[idx_task].period;
+        tcb_vec[idx_task].dline += (int32_t)tcb_vec[idx_task].period;
         tcb_vec[idx_task].state = TASK_STATE_READY;
         insert(idx_task, &idx_ready);
         count++;
@@ -197,7 +199,7 @@ kernel_state wake_up(void) {
     return KERNEL_STATE_OK;
 }
 
-int32_t guarantee(int32_t idx_task) {
+int16_t guarantee(int16_t idx_task) {
     util_fact += tcb_vec[idx_task].utilf;
 
     if (util_fact > 1.0) {
@@ -209,10 +211,10 @@ int32_t guarantee(int32_t idx_task) {
     return TRUE;
 }
 
-void activate(int32_t idx_task) {
+void activate(int16_t idx_task) {
     // TODO: call save_ctx() here
     if (tcb_vec[idx_task].criticality == TASK_CRIT_HARD) {
-        tcb_vec[idx_task].dline = sys_clock + (int64_t)tcb_vec[idx_task].period;
+        tcb_vec[idx_task].dline = sys_clock + (int32_t)tcb_vec[idx_task].period;
     }
 
     tcb_vec[idx_task].state = TASK_STATE_READY;
@@ -232,7 +234,7 @@ void sleep(void) {
 }
 
 void end_cycle(void) {
-    int64_t deadline;
+    int32_t deadline;
 
     // TODO: call save_ctx() here
 
@@ -243,7 +245,7 @@ void end_cycle(void) {
 
         insert(idx_exe, &idx_idle);
     } else {
-        deadline += (int64_t)tcb_vec[idx_exe].period;
+        deadline += (int32_t)tcb_vec[idx_exe].period;
 
         tcb_vec[idx_exe].dline = deadline;
         tcb_vec[idx_exe].state = TASK_STATE_READY;
@@ -271,7 +273,7 @@ void end_process(void) {
     // TODO: call load_ctx() here
 }
 
-void kill(int32_t idx_task) {
+void kill(int16_t idx_task) {
     // TODO: call enable_interrupts() here
     if (idx_exe == idx_task) {
         end_process();
@@ -300,9 +302,9 @@ void kill(int32_t idx_task) {
     // TODO: call disable_interrupts() here
 }
 
-int32_t create(const char name[MAX_STR_LEN + 1], int32_t (*addr)(),
+int16_t create(const char name[MAX_STR_LEN + 1], int16_t (*addr)(),
                task_type type, float period, float wcet) {
-    int32_t idx_task;
+    int16_t idx_task;
 
     // TODO: call enable_interrupts() here
 
@@ -321,12 +323,12 @@ int32_t create(const char name[MAX_STR_LEN + 1], int32_t (*addr)(),
     tcb_vec[idx_task].addr = addr;
     tcb_vec[idx_task].type = type;
     tcb_vec[idx_task].state = TASK_STATE_SLEEP;
-    tcb_vec[idx_task].period = (int32_t)(period / time_unit);
+    tcb_vec[idx_task].period = (int16_t)(period / time_unit);
     tcb_vec[idx_task].wcet = wcet;
     tcb_vec[idx_task].utilf = wcet / period;
-    tcb_vec[idx_task].priority = (int32_t)period;
+    tcb_vec[idx_task].priority = (int16_t)period;
     tcb_vec[idx_task].dline =
-        /* TODO: MAX_int64_t + */ (int64_t)(period - PRIORITY_LEVELS);
+        /* TODO: MAX_int32_t + */ (int32_t)(period - PRIORITY_LEVELS);
 
     // TODO: enable CPU interrupts
 
@@ -338,10 +340,8 @@ void dispatch(void) {
 
     if (idx_exe != NIL) {
         tcb_vec[idx_exe].state = TASK_STATE_EXE;
-        Serial.print("Dispatching task: ");
-        Serial.println(idx_exe);
     } else {
-        Serial.println("No task to dispatch");
+        log("No task to dispatch!", LOG_FD_STDOUT);
     }
 }
 
@@ -381,18 +381,15 @@ ISR(TIMER1_COMPA_vect) {
 }
 
 int main() {
-    // Set the BAUD rate
-    Serial.begin(9600);
+    Serial.begin(BAUD_RATE);
 
-    // Initialize Arduino's hardware
-    log("Initializing hardware", LOG_FD_STDOUT);
+    log("Initializing hardware...", LOG_FD_STDOUT);
     init_hardware();
-    log("Success!", LOG_FD_STDERR);
+    log("Success!\n", LOG_FD_STDERR);
 
-    // Initialize the Kernel
-    log("Initializing kernel", LOG_FD_STDOUT);
+    log("Initializing kernel", LOG_FD_STDOUT);  
     init_system(TICK_DURATION_MS);
-    log("Success!", LOG_FD_STDOUT);
+    log("Success!\n", LOG_FD_STDOUT);
 
     return EXIT_SUCCESS;
 }
