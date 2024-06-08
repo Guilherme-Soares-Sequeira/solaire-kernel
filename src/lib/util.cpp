@@ -13,10 +13,8 @@ void solaire_log(const char *str, log_fd fd) {
             exit(EXIT_FAILURE);
     }
 
-    char msg[MAX_MSG_SIZE];
-
-    snprintf(msg, sizeof(msg), "%s%s", prefix, str);
-
-    Serial.println(msg);
+    Serial.print(prefix);
+    Serial.println(str);
+    
     Serial.flush();
 }

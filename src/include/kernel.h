@@ -23,6 +23,8 @@ typedef enum {
 /* clang-format on */
 
 
+int16_t fn();
+
 void insert(int16_t idx_task, int16_t *queue);
 
 int16_t extract(int16_t idx_task, int16_t *queue);

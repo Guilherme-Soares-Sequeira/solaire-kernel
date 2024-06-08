@@ -3,7 +3,7 @@
 
 #include <Arduino.h>
 
-#define MAX_MSG_SIZE 256
+#define MAX_MSG_SIZE 512
 
 typedef enum {
     LOG_FD_STDOUT,

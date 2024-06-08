@@ -21,6 +21,10 @@ int32_t sys_clock; /* system's clock, number of ticks since system initializatio
 float time_unit; /* time unit used for timer ticks */
 float util_fact; /* cpu utilization factor         */
 
+int16_t fn() {
+    return 1;
+}
+
 void insert(int16_t idx_task, int16_t *queue) {
     int32_t deadline;
     int16_t prev_tcb;
@@ -193,7 +197,7 @@ void end_cycle(void) {
         insert(idx_exe, &idx_ready);
     }
 
-    dispatch();
+    // dispatch();
 
     // TODO: call load_ctx() here
 }
@@ -247,15 +251,17 @@ void kill(int16_t idx_task) {
 
 int16_t create(const char name[MAX_STR_LEN + 1], int16_t (*addr)(),
                task_type type, float period, float wcet) {
-    int16_t idx_task;
-
-    disable_interrupts();
-
+    
+    solaire_log("Create was called!", LOG_FD_STDOUT);
+ 
+    int16_t idx_task = 0;
+    
     idx_task = getfirst(&idx_freetcb);
     if (idx_task == NIL) {
         return KERNEL_STATE_NO_TCB;
     }
-
+    
+    
     if (tcb_vec[idx_task].criticality == TASK_CRIT_HARD) {
         if (!guarantee(idx_task)) {
             return KERNEL_STATE_NO_GUARANTEE;
@@ -271,8 +277,6 @@ int16_t create(const char name[MAX_STR_LEN + 1], int16_t (*addr)(),
     tcb_vec[idx_task].utilf = wcet / period;
     tcb_vec[idx_task].priority = (int16_t)period;
     tcb_vec[idx_task].dline = INT_FAST32_MAX + (int32_t)(period - PRIORITY_LEVELS);
-
-    enable_interrupts();
 
     return idx_task;
 }
@@ -298,6 +302,8 @@ void schedule(void) {
 }
 
 int16_t init_kernel(float tick, int16_t (*task_main)(void)) {
+    solaire_log("init_kernel was called", LOG_FD_STDOUT);
+    
     time_unit = tick;
 
     for (unsigned int task_index = 0; task_index < MAX_TASKS - 1;
@@ -305,7 +311,8 @@ int16_t init_kernel(float tick, int16_t (*task_main)(void)) {
         tcb_vec[task_index].next = task_index + 1;
         tcb_vec[task_index].stack_ptr = (void*) (stack_vec + task_index * STACK_SIZE);
     }
-
+    
+    
     tcb_vec[MAX_TASKS - 1].next = NIL;
 
     idx_ready = NIL;
@@ -313,15 +320,18 @@ int16_t init_kernel(float tick, int16_t (*task_main)(void)) {
     idx_zombie = NIL;
     idx_freetcb = 0;
     util_fact = 0.0f;
-
-    int16_t idx_main;
-    if ((idx_main = create("main", task_main, TASK_TYPE_APERIODIC, 1000, 1000)) != EXIT_SUCCESS) {
+    
+    solaire_log("Creating main task...", LOG_FD_STDOUT);
+    int16_t idx_main = create("main", task_main, TASK_TYPE_APERIODIC, 100, 100);
+    solaire_log("Main task was created successfully!", LOG_FD_STDERR);
+    
+    if (idx_main != EXIT_SUCCESS) {
         solaire_log("Error while initializing main task!", LOG_FD_STDERR);
 
         return EXIT_FAILURE;
     }
     
     tcb_vec[idx_main].state = TASK_STATE_EXE;
-
+    
     return EXIT_SUCCESS;
 }

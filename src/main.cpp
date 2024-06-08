@@ -14,11 +14,13 @@
 #define BAUD_RATE 115200
 
 ISR(TIMER1_COMPA_vect) {
+    /*
     disable_interrupts();
     
     wake_up();
 
     enable_interrupts(); 
+    */
 }
 
 int16_t t1(void) { while (TRUE) { solaire_log("AaaaaaaA", LOG_FD_STDOUT); end_cycle(); } return EXIT_SUCCESS; }
@@ -51,13 +53,42 @@ int16_t task_main(void) {
     return EXIT_SUCCESS;
 }
 
-int main() {
+/*
+void setup() {
     Serial.begin(BAUD_RATE);
 
+    solaire_log("Hello from main!", LOG_FD_STDOUT);
+   
     solaire_log("Initializing hardware...", LOG_FD_STDOUT);
     set_timer_registers();
     solaire_log("Success!\n", LOG_FD_STDOUT);
+        
+    solaire_log("Initializing kernel", LOG_FD_STDOUT);
+    
+    int16_t ret = init_kernel(TICK_DURATION_MS, task_main);
+    
+    if (ret != EXIT_SUCCESS) {
+        solaire_log("Error while initializing the system!", LOG_FD_STDERR);
+    }
 
+    solaire_log("Success!\n", LOG_FD_STDOUT);
+}
+
+void loop() {
+
+}
+*/
+
+
+int main() {
+    Serial.begin(BAUD_RATE);
+
+    solaire_log("Hello from main!", LOG_FD_STDOUT);
+   
+    solaire_log("Initializing hardware...", LOG_FD_STDOUT);
+    set_timer_registers();
+    solaire_log("Success!\n", LOG_FD_STDOUT);
+        
     solaire_log("Initializing kernel", LOG_FD_STDOUT);
     
     if (init_kernel(TICK_DURATION_MS, task_main) != EXIT_SUCCESS) {
