@@ -1,10 +1,12 @@
 #include <stdint.h>
 
+#include "include/context.h"
 #include "include/kernel.h"
+#include "include/remaps.h"
 #include "include/timer.h"
 #include "include/util.h"
-#include "include/remaps.h"
-#include "include/context.h"
+
+#define BAUD_RATE 115200
 
 #define STACK_SIZE 128 // stack size in bytes
 
@@ -18,40 +20,174 @@ int16_t idx_idle;    /* index to head of idle queue        */
 int16_t idx_zombie;  /* index to head of zombie queue      */
 int16_t idx_freetcb; /* index to head of free TCB queue    */
 
-volatile void* volatile stack_exe;
+volatile uint8_t *volatile stack_exe;
 
-int32_t sys_clock; /* system's clock, number of ticks since system initialization */
-float time_unit; /* time unit used for timer ticks */
-float util_fact; /* cpu utilization factor         */
+int32_t sys_clock; /* system's clock number of ticks since system initialization */
+float time_unit;   /* time unit used for timer ticks */
+float util_fact;   /* cpu utilization factor         */
 
-void insert(int16_t idx_task, int16_t *queue) {
+// ------------------------ Low Level Utils ------------------------
+
+void insert(int16_t idx_task, int16_t *queue, task_state state) {
     int32_t deadline;
-    int16_t prev_tcb;
-    int16_t next_tcb;
+    int16_t idx_prev_tcb;
+    int16_t idx_next_tcb;
 
-    prev_tcb = NIL;
-    next_tcb = *queue;
+    idx_prev_tcb = NIL;
+    idx_next_tcb = *queue;
     deadline = tcb_vec[idx_task].dline;
 
-    while ((next_tcb != NIL) && (deadline >= tcb_vec[next_tcb].dline)) {
-        prev_tcb = next_tcb;
-        next_tcb = tcb_vec[next_tcb].next;
+    tcb_vec[idx_task].state = state;
+
+    while ((idx_next_tcb != NIL) && (deadline >= tcb_vec[idx_next_tcb].dline)) {        
+        idx_prev_tcb = idx_next_tcb;
+        idx_next_tcb = tcb_vec[idx_next_tcb].next;
     }
 
-    if (prev_tcb != NIL) {
-        tcb_vec[prev_tcb].next = idx_task;
+    if (idx_prev_tcb != NIL) {
+        tcb_vec[idx_prev_tcb].next = idx_task;
     } else {
         *queue = idx_task;
     }
 
-    if (next_tcb != NIL) {
-        tcb_vec[next_tcb].prev = idx_task;
+    if (idx_next_tcb != NIL) {
+        tcb_vec[idx_next_tcb].prev = idx_task;
     }
 
-    tcb_vec[idx_task].prev = prev_tcb;
-    tcb_vec[idx_task].next = next_tcb;
+    tcb_vec[idx_task].prev = idx_prev_tcb;
+    tcb_vec[idx_task].next = idx_next_tcb;
 }
 
+int16_t pop(int16_t *queue) {
+    int16_t head;
+
+    head = *queue;
+
+    if (head == NIL) {
+        return NIL;
+    }
+
+    *queue = tcb_vec[head].next;
+
+    tcb_vec[*queue].prev = NIL;
+
+    return head;
+}
+
+int32_t firstdline(int16_t head) { return tcb_vec[head].dline; }
+
+int16_t empty(int16_t head) {
+    if (head == NIL) {
+        return TRUE;
+    } else {
+        return FALSE;
+    }
+}
+
+int16_t guarantee(int16_t idx_task) {
+    util_fact += tcb_vec[idx_task].utilf;
+
+    if (util_fact > 1.0) {
+        util_fact -= tcb_vec[idx_task].utilf;
+
+        solaire_log("Could not guarantee feasibility of task!", LOG_FD_STDOUT);
+
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+int16_t create(const char name[MAX_STR_LEN + 1], void (*addr)(), task_type type, task_crit criticality,
+               float period, float wcet) {
+    int16_t idx_task = 0;
+
+    Serial.print("received addr = ");
+    Serial.flush();
+    Serial.println((uint16_t) addr);
+    Serial.flush();
+
+    Serial.print("received *addr = ");
+    Serial.flush();
+    Serial.println((uint16_t) *addr);
+    Serial.flush();
+
+    idx_task = pop(&idx_freetcb);
+    
+    if (idx_task == NIL) {
+        solaire_log("There are no free TCBs!", LOG_FD_STDERR);
+
+        exit(KERNEL_STATE_NO_TCB);
+    }
+
+    if (tcb_vec[idx_task].criticality == TASK_CRIT_HARD) {
+        if (!guarantee(idx_task)) {
+            return KERNEL_STATE_NO_GUARANTEE;
+        }
+    }
+
+    strcpy(tcb_vec[idx_task].name, name);
+    tcb_vec[idx_task].addr = addr;
+    tcb_vec[idx_task].type = type;
+    tcb_vec[idx_task].criticality = criticality; 
+    tcb_vec[idx_task].state = TASK_STATE_SLEEP;
+    tcb_vec[idx_task].period = (int16_t)(period / time_unit);
+    tcb_vec[idx_task].wcet = (int16_t)(wcet / time_unit);
+    tcb_vec[idx_task].utilf = wcet / period;
+    tcb_vec[idx_task].priority = (int16_t)period;
+    tcb_vec[idx_task].dline = INT_FAST32_MAX + (int32_t)(period - PRIORITY_LEVELS);
+    tcb_vec[idx_task].stack_ptr = (uint8_t *)init_task_stack(
+        tcb_vec[idx_task].stack_ptr, tcb_vec[idx_task].addr);
+
+    return idx_task;
+}
+
+void wake_up(void) {
+    int16_t count = 0;
+    int16_t idx_task;
+
+    sys_clock++;
+
+    if (sys_clock >= LIFETIME) {
+        solaire_log("The system time has expired!", LOG_FD_STDERR);
+
+        exit(KERNEL_STATE_TIME_EXPIRED);
+    }
+
+    if (tcb_vec[idx_exe].criticality == TASK_CRIT_HARD) {
+        if (sys_clock > tcb_vec[idx_exe].dline) {
+            solaire_log("Timer overflow!", LOG_FD_STDERR);
+
+            exit(KERNEL_STATE_TIME_OVERFLOW);
+        }
+    }
+
+    while (!empty(idx_zombie) && firstdline(idx_zombie) <= sys_clock) {
+        idx_task = pop(&idx_zombie);
+        util_fact -= tcb_vec[idx_task].utilf;
+
+        insert(idx_task, &idx_freetcb, TASK_STATE_FREE);
+    }
+
+    while (!empty(idx_idle) && (firstdline(idx_idle) <= sys_clock)) {
+        solaire_log("The idle queue is not empty", LOG_FD_STDOUT);
+
+        idx_task = pop(&idx_idle);
+        tcb_vec[idx_task].dline += (int32_t)tcb_vec[idx_task].period;
+
+        insert(idx_task, &idx_ready, TASK_STATE_READY);
+
+        count++;
+    }
+
+    if (count > 0) {
+        schedule();
+    }
+
+    return;
+}
+
+/* TODO
 int16_t extract(int16_t idx_task, int16_t *queue) {
     int16_t prev_tcb;
     int16_t next_tcb;
@@ -71,119 +207,206 @@ int16_t extract(int16_t idx_task, int16_t *queue) {
 
     return idx_task;
 }
+*/
 
-int16_t getfirst(int16_t *queue) {
-    int16_t head;
+/// ------------------- 3. Scheduling Primitives ------------------- ///
 
-    head = *queue;
+void dispatch(void) {
+    idx_exe = pop(&idx_ready);
 
-    if (head == NIL) {
-        return NIL;
+    if (idx_exe == NIL) {
+        solaire_log("No task to dispatch!\n", LOG_FD_STDOUT);
+
+        return;
     }
 
-    *queue = tcb_vec[head].next;
-    tcb_vec[*queue].prev = NIL;
-
-    return head;
+    tcb_vec[idx_exe].state = TASK_STATE_EXE;
+    stack_exe = tcb_vec[idx_exe].stack_ptr;
 }
 
-int32_t firstdline(int16_t head) { return tcb_vec[head].dline; }
+void schedule(void) {
+    if (firstdline(idx_ready) < tcb_vec[idx_exe].dline) {
+        tcb_vec[idx_exe].stack_ptr = stack_exe;
 
-int16_t empty(int16_t head) {
-    // TODO: this is probably very stupid, need to change later
-    if (head == NIL) {
-        return TRUE;
-    } else {
-        return FALSE;
+        insert(idx_exe, &idx_ready, TASK_STATE_READY);
+
+        dispatch();
     }
 }
 
-kernel_state wake_up(void) {
-    int16_t count = 0;
-    int16_t idx_task;
+
+/// ----------------------- End of Section 3 ----------------------- ///
+
+void init_kernel(float tick, void (*task_main)(void)) {
+    Serial.begin(BAUD_RATE);
     
-    sys_clock++;
+    solaire_log("Hello", LOG_FD_STDOUT);
 
-    if (sys_clock >= LIFETIME) {
-        return KERNEL_STATE_TIME_EXPIRED;
+    disable_interrupts();
+
+    set_timer_registers();
+
+
+    
+    time_unit = tick;
+    for (unsigned int task_index = 0; task_index < MAX_TASKS - 1;
+         task_index++) {
+        tcb_vec[task_index].next = task_index + 1;
+        tcb_vec[task_index].stack_ptr = &(stack_vec[task_index]);
     }
 
-    if (tcb_vec[idx_exe].criticality == TASK_CRIT_HARD) {
-        if (sys_clock > tcb_vec[idx_exe].dline) {
-            return KERNEL_STATE_TIME_OVERFLOW;
-        }
+    tcb_vec[MAX_TASKS - 1].next = NIL;
+    tcb_vec[MAX_TASKS - 1].stack_ptr = &(stack_vec[MAX_TASKS - 1]);
+
+    idx_ready = NIL;
+    idx_idle = NIL;
+    idx_zombie = NIL;
+    idx_freetcb = 0;
+    util_fact = 0.0f;
+
+    int16_t idx_main =
+        create("M", task_main, TASK_TYPE_APERIODIC, TASK_CRIT_NRT, 10000.0, 10000.0);
+    
+    if (idx_main != EXIT_SUCCESS) {
+        solaire_log("Error while initializing main task!", LOG_FD_STDERR);
+
+        abort();
     }
 
-    while (!empty(idx_zombie) && firstdline(idx_zombie) <= sys_clock) {
-        idx_task = getfirst(&idx_zombie);
-        util_fact -= tcb_vec[idx_task].utilf;
-        tcb_vec[idx_task].state = TASK_STATE_FREE;
+    idx_exe = idx_main;
 
-        insert(idx_task, &idx_freetcb);
-    }
+    tcb_vec[idx_exe].state = TASK_STATE_EXE;
+    stack_exe = tcb_vec[idx_exe].stack_ptr;
 
-    while (!empty(idx_idle) && (firstdline(idx_idle) <= sys_clock)) {
-        idx_task = getfirst(&idx_idle);
-        tcb_vec[idx_task].dline += (int32_t)tcb_vec[idx_task].period;
-        tcb_vec[idx_task].state = TASK_STATE_READY;
+    Serial.print("main_task = ");
+    Serial.flush();
+    Serial.println((uint16_t) task_main);
+    Serial.flush();
 
-        insert(idx_task, &idx_ready);
+    Serial.print("in tcb = ");
+    Serial.flush();
+    Serial.println((uint16_t) tcb_vec[idx_main].addr);
+    Serial.flush();
 
-        count++;
-    }
+    uint16_t sp = 0;
+    uint16_t a = 0;
 
-    if (count > 0) {
-        schedule();
-    }
+    Serial.print("&a = ");
+    Serial.flush();
+    Serial.println((uint16_t) &a);
+    Serial.flush();
 
-    return KERNEL_STATE_OK;
+    asm volatile (
+        "in %A0, __SP_L__ \n\t"
+        "in %B0, __SP_H__"
+        : "=r" (sp)
+    );
+
+    Serial.print("&sp = ");
+    Serial.flush();
+    Serial.println((uint16_t) &sp);
+    Serial.flush();
+
+    Serial.print("sp = ");
+    Serial.flush();
+    Serial.println((uint16_t) sp);
+    Serial.flush();
+
+    uint16_t b = 0;
+
+    Serial.print("&b = ");
+    Serial.flush();
+    Serial.println((uint16_t) &b);
+    Serial.flush();
+
+    asm volatile (
+        "in %A0, __SP_L__ \n\t"
+        "in %B0, __SP_H__"
+        : "=r" (sp)
+    );
+
+    Serial.print("&sp = ");
+    Serial.flush();
+    Serial.println((uint16_t) &sp);
+    Serial.flush();
+
+    Serial.print("sp = ");
+    Serial.flush();
+    Serial.println((uint16_t) sp);
+    Serial.flush();
+
+    // restore_ctx();
+
+    /*
+
+    asm ("ret");
+
+    solaire_log("shit but in init_kernel", LOG_FD_STDERR);
+    
+    abort();
+
+    */
+   asm volatile("ret");
 }
 
-int16_t guarantee(int16_t idx_task) {
-    util_fact += tcb_vec[idx_task].utilf;
+ISR(TIMER1_COMPA_vect, ISR_NAKED) {
+    disable_interrupts();
 
-    if (util_fact > 1.0) {
-        util_fact -= tcb_vec[idx_task].utilf;
+    save_ctx();
 
-        return FALSE;
+    solaire_log("Calling wake_up", LOG_FD_STDOUT);
+    wake_up();
+    solaire_log("Returned from wake_up", LOG_FD_STDOUT);
+
+    restore_ctx();
+
+    enable_interrupts();
+
+    asm volatile("reti");
+}
+
+/// ------------------------ System Calls ------------------------ ///
+
+void end_cycle(void) {
+    disable_interrupts();
+
+    save_ctx();
+
+    int32_t deadline;
+
+    deadline = tcb_vec[idx_exe].dline;
+
+    if (sys_clock < deadline) {
+        insert(idx_exe, &idx_idle, TASK_STATE_IDLE);
+    } else {
+        deadline += (int32_t)tcb_vec[idx_exe].period;
+
+        tcb_vec[idx_exe].dline = deadline;
+
+        insert(idx_exe, &idx_ready, TASK_STATE_READY);
     }
 
-    return TRUE;
+    tcb_vec[idx_exe].stack_ptr = stack_exe;
+
+    dispatch();
+
+    restore_ctx();
+
+    asm volatile("reti");
 }
+
 
 void activate(int16_t idx_task) {
     if (tcb_vec[idx_task].criticality == TASK_CRIT_HARD) {
         tcb_vec[idx_task].dline = sys_clock + (int32_t)tcb_vec[idx_task].period;
     }
 
-    tcb_vec[idx_task].state = TASK_STATE_READY;
-
-    insert(idx_task, &idx_ready);
+    insert(idx_task, &idx_ready, TASK_STATE_READY);
 }
 
+/*
 void sleep(void) {
     tcb_vec[idx_exe].state = TASK_STATE_SLEEP;
-
-    dispatch();
-}
-
-void end_cycle(void) {
-    int32_t deadline;
-
-    deadline = tcb_vec[idx_exe].dline;
-
-    if (sys_clock < deadline) {
-        tcb_vec[idx_exe].state = TASK_STATE_IDLE;
-
-        insert(idx_exe, &idx_idle);
-    } else {
-        deadline += (int32_t)tcb_vec[idx_exe].period;
-
-        tcb_vec[idx_exe].dline = deadline;
-        tcb_vec[idx_exe].state = TASK_STATE_READY;
-
-        insert(idx_exe, &idx_ready);
-    }
 
     dispatch();
 }
@@ -192,16 +415,12 @@ void end_process(void) {
     disable_interrupts();
 
     if (tcb_vec[idx_exe].criticality == TASK_CRIT_HARD) {
-        insert(idx_exe, &idx_zombie);
+        insert(idx_exe, &idx_zombie, TASK_STATE_ZOMBIE);
     } else {
-        tcb_vec[idx_exe].state = TASK_STATE_FREE;
-
-        insert(idx_exe, &idx_freetcb);
+        insert(idx_exe, &idx_freetcb, TASK_STATE_FREE);
     }
 
     dispatch();
-
-    // TODO: call load_ctx() here
 }
 
 void kill(int16_t idx_task) {
@@ -225,94 +444,11 @@ void kill(int16_t idx_task) {
     }
 
     if (tcb_vec[idx_task].criticality == TASK_CRIT_HARD) {
-        insert(idx_task, &idx_zombie);
+        insert(idx_task, &idx_zombie, TASK_STATE_ZOMBIE);
     } else {
-        tcb_vec[idx_task].state = TASK_STATE_FREE;
-
-        insert(idx_task, &idx_freetcb);
+        insert(idx_task, &idx_freetcb, TASK_STATE_FREE);
     }
 
-    enable_interrupts();    
+    enable_interrupts();
 }
-
-int16_t create(const char name[MAX_STR_LEN + 1], void (*addr)(),
-               task_type type, float period, float wcet) {
-    int16_t idx_task = 0;
-    
-    idx_task = getfirst(&idx_freetcb);
-    if (idx_task == NIL) {
-        return KERNEL_STATE_NO_TCB;
-    }
-    
-    
-    if (tcb_vec[idx_task].criticality == TASK_CRIT_HARD) {
-        if (!guarantee(idx_task)) {
-            return KERNEL_STATE_NO_GUARANTEE;
-        }
-    }
-    
-    strcpy(tcb_vec[idx_task].name, name);
-    tcb_vec[idx_task].addr = addr;
-    tcb_vec[idx_task].type = type;
-    tcb_vec[idx_task].state = TASK_STATE_SLEEP;
-    tcb_vec[idx_task].period = (int16_t)(period / time_unit);
-    tcb_vec[idx_task].wcet = wcet;
-    tcb_vec[idx_task].utilf = wcet / period;
-    tcb_vec[idx_task].priority = (int16_t)period;
-    tcb_vec[idx_task].dline = INT_FAST32_MAX + (int32_t)(period - PRIORITY_LEVELS);
-
-    return idx_task;
-}
-
-void dispatch(void) {
-    idx_exe = getfirst(&idx_ready);
-
-    if (idx_exe != NIL) {
-        tcb_vec[idx_exe].state = TASK_STATE_EXE;
-    } else {
-        solaire_log("No task to dispatch!\n", LOG_FD_STDOUT);
-    }
-}
-
-void schedule(void) {
-    if (firstdline(idx_ready) < tcb_vec[idx_exe].dline) {
-        tcb_vec[idx_exe].state = TASK_STATE_READY;
-        tcb_vec[idx_exe].stack_ptr = (uint8_t*) stack_exe;
-
-        insert(idx_exe, &idx_ready);
-
-        dispatch();
-    }
-}
-
-int16_t init_kernel(float tick, void (*task_main)(void)) {
-    time_unit = tick;
-
-    for (unsigned int task_index = 0; task_index < MAX_TASKS - 1;
-         task_index++) {
-        tcb_vec[task_index].next = task_index + 1;
-        tcb_vec[task_index].stack_ptr = (stack_vec + task_index * STACK_SIZE);
-    }
-    
-    tcb_vec[MAX_TASKS - 1].next = NIL;
-
-    idx_ready = NIL;
-    idx_idle = NIL;
-    idx_zombie = NIL;
-    idx_freetcb = 0;
-    util_fact = 0.0f;
-    
-    //solaire_log("Creating the main task in init_kernel...", LOG_FD_STDOUT);
-
-    int16_t idx_main = create("main", task_main, TASK_TYPE_APERIODIC, 10000.0, 10000.0);
-
-    if (idx_main != EXIT_SUCCESS) {
-        solaire_log("Error while initializing main task!", LOG_FD_STDERR);
-
-        return EXIT_FAILURE;
-    }
-    
-    tcb_vec[idx_main].state = TASK_STATE_EXE;
-
-    return EXIT_SUCCESS;
-}
+*/

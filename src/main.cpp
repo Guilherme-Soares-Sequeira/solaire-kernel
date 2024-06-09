@@ -11,50 +11,52 @@
 #include "include/timer.h"
 #include "include/kernel.h"
 
-#define BAUD_RATE 115200
 
-ISR(TIMER1_COMPA_vect) {
-    disable_interrupts();
-    
-    save_ctx();
-
-    wake_up();
-
-    restore_ctx();
-
-    enable_interrupts();
-
-    asm volatile("reti"); 
-}
-
-void t1(void) { while (TRUE) { solaire_log("AaaaaaaA", LOG_FD_STDOUT); end_cycle(); } }
-void t2(void) { while (TRUE) { solaire_log("BbbbB", LOG_FD_STDOUT); end_cycle(); }    }
-void t3(void) { while (TRUE) { solaire_log("CcC", LOG_FD_STDOUT); end_cycle(); }      }
+void t1(void) { while (TRUE) { toggle_led(LED1); end_cycle(); } }
+void t2(void) { while (TRUE) { toggle_led(LED2); end_cycle(); } }
+void t3(void) { while (TRUE) { toggle_led(LED3); end_cycle(); } }
 
 void task_main(void) {
-    solaire_log("Creating the main task...\n", LOG_FD_STDOUT);
+    disable_interrupts();
 
-    if (create(TASK1_NAME, t1, TASK_TYPE_PERIODIC, TASK1_PERIOD, TASK1_WCET) != KERNEL_STATE_OK) {
-        solaire_log("Error while creating Task 1!", LOG_FD_STDERR);
-        return;
-    }
-    
-    if (create(TASK2_NAME, t2, TASK_TYPE_PERIODIC, TASK2_PERIOD, TASK2_WCET) != KERNEL_STATE_OK) {
-        solaire_log("Error while creating Task 2!", LOG_FD_STDERR);
-        return;
-    }
-    
-    if (create(TASK3_NAME, t3, TASK_TYPE_PERIODIC, TASK3_PERIOD, TASK3_WCET) != KERNEL_STATE_OK) {
-        solaire_log("Error while creating Task 3!", LOG_FD_STDERR);
-        return;
-    }
+    solaire_log("Creating tasks...\n", LOG_FD_STDOUT);
 
     pin_md(LED1, OUTPUT);
     pin_md(LED2, OUTPUT);
     pin_md(LED3, OUTPUT);
     pin_md(LED4, OUTPUT);
     
-    solaire_log("All tasks have been created successfully!", LOG_FD_STDOUT);
+    int16_t idx_t1 = create(TASK1_NAME, t1, TASK_TYPE_PERIODIC, TASK1_CRIT, TASK1_PERIOD, TASK1_WCET);
+    int16_t idx_t2 = create(TASK2_NAME, t2, TASK_TYPE_PERIODIC, TASK2_CRIT, TASK2_PERIOD, TASK2_WCET);
+    int16_t idx_t3 = create(TASK3_NAME, t3, TASK_TYPE_PERIODIC, TASK3_CRIT, TASK3_PERIOD, TASK3_WCET);
+
+    Serial.print("idx_t1 = ");
+    Serial.flush();
+
+    Serial.println(idx_t1);
+    Serial.flush();
+
+    Serial.print("idx_t2 = ");
+    Serial.flush();
+
+    Serial.println(idx_t2);
+    Serial.flush();
+
+    Serial.print("idx_t3 = ");
+    Serial.flush();
+
+    Serial.println(idx_t3);
+    Serial.flush();
+
+    solaire_log("Activating tasks...\n", LOG_FD_STDOUT);
+
+    activate(idx_t1);
+    activate(idx_t2);
+    activate(idx_t3);     
+    
+    solaire_log("All tasks have been activated successfully!", LOG_FD_STDOUT);
+
+    enable_interrupts();
 
     /* busy waiting */
     while (TRUE) {
@@ -64,27 +66,68 @@ void task_main(void) {
     return;
 }
 
+uint16_t get_sp() {
+    uint16_t sp;
+
+    asm volatile (
+        "in %A0, __SP_L__ \n\t"
+        "in %B0, __SP_H__"
+        : "=r" (sp)
+    );
+
+    return sp;
+}
+
+void fn() { 
+    uint16_t a, b, c;
+
+    a = 0;
+    a++;
+    b = 1;
+    b = 2*a + 1;
+    c = 2;
+    c = b + 3;
+
+    uint16_t sp = get_sp();
+
+    Serial.print("&a: ");
+    Serial.flush();
+    Serial.println((uint16_t) &a, HEX);
+    Serial.flush();
+
+    Serial.print("&sp: ");
+    Serial.flush();
+    Serial.println((uint16_t) &sp, HEX);
+    Serial.flush();
+
+    Serial.print("&fn: ");
+    Serial.flush();
+    Serial.println((uint16_t) &fn, HEX);
+    Serial.flush();
+
+    Serial.print("&b: ");
+    Serial.flush();
+    Serial.println((uint16_t) &b, HEX);
+    Serial.flush();
+
+    sp = get_sp();
+
+    Serial.print("&c: ");
+    Serial.flush();
+    Serial.println((uint16_t) &c, HEX);
+    Serial.flush();
+
+    return;
+}
+
 int main() {
-    disable_interrupts();
-    Serial.begin(BAUD_RATE);
-   
-    solaire_log(F("Initializing hardware..."), LOG_FD_STDOUT);
-    set_timer_registers();
-    solaire_log("Success!\n", LOG_FD_STDOUT);
-        
-    solaire_log("Initializing kernel...", LOG_FD_STDOUT);
-    
-    if (init_kernel(TICK_DURATION_MS, task_main) != EXIT_SUCCESS) {
-        solaire_log("Error while initializing the system!", LOG_FD_STDERR);
+    Serial.begin(115200);
 
-        return EXIT_FAILURE;
-    }
+    fn();
 
-    enable_interrupts();
+    // init_kernel(TICK_DURATION_MS, task_main);
 
-    task_main();
+    // solaire_log("shit\n", LOG_FD_STDERR);
 
-    solaire_log("Reached unreachable code!\n", LOG_FD_STDERR);
-
-    return EXIT_FAILURE;
+    return EXIT_SUCCESS;
 }

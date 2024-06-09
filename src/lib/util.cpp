@@ -1,7 +1,7 @@
-#include "include/util.h"
-
 #include <Arduino.h>
+#include <stdint.h>
 
+#include "include/util.h"
 #include "include/remaps.h"
 
 void toggle_led(uint8_t led_pin) {
@@ -24,5 +24,11 @@ void __solaire_log_fn(const __FlashStringHelper *str, log_fd fd) {
     Serial.print(prefix);
     Serial.println(str);
     
+    Serial.flush();
+}
+
+void solaire_dynamic_log(const char* str, log_fd fd) {
+    Serial.print("[STDOUT] ");
+    Serial.println(str);
     Serial.flush();
 }

@@ -2,7 +2,7 @@
 #include "include/bit.h"
 #include "include/register.h"
 
-uint8_t* init_task_stack(uint8_t* stack_ptr, void (*addr)()) {
+volatile uint8_t* init_task_stack(volatile uint8_t* stack_ptr, void (*addr)()) {
     uint16_t addr_ptr_holder = (uint16_t) addr;
     
     *(stack_ptr) = (uint8_t) (addr_ptr_holder & LSB_2B_MASK);

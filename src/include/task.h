@@ -12,9 +12,13 @@
 #define TASK2_NAME "T2"
 #define TASK3_NAME "T3"
 
-#define TASK1_PERIOD  50.0
-#define TASK2_PERIOD 100.0
-#define TASK3_PERIOD 150.0
+#define TASK1_PERIOD  250.0
+#define TASK2_PERIOD 500.0
+#define TASK3_PERIOD 1000.0
+
+#define TASK1_CRIT TASK_CRIT_HARD
+#define TASK2_CRIT TASK_CRIT_HARD
+#define TASK3_CRIT TASK_CRIT_HARD
 
 #define TASK1_WCET 25.0
 #define TASK2_WCET 25.0
@@ -55,12 +59,12 @@ typedef struct {
 
     float utilf;      /* task utilization factor                  */
 
-    uint8_t* stack_ptr; /* pointer to the task's stack */
+    volatile uint8_t* stack_ptr; /* pointer to the task's stack */
 
     int16_t next; /* pointer to the next TCB     */
     int16_t prev; /* pointer to the previous TCB */
 } TCB;
 
-uint8_t* init_task_stack(void* stack_ptr, void (*addr)());
+volatile uint8_t* init_task_stack(volatile uint8_t* stack_ptr, void (*addr)());
 
 #endif // TASK_H
