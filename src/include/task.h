@@ -6,11 +6,11 @@
 
 #include "misc.h"
 
-#define MAX_STR_LEN 16
+#define MAX_STR_LEN 2
 
-#define TASK1_NAME "Task 1"
-#define TASK2_NAME "Task 2"
-#define TASK3_NAME "Task 3"
+#define TASK1_NAME "T1"
+#define TASK2_NAME "T2"
+#define TASK3_NAME "T3"
 
 #define TASK1_PERIOD  50.0
 #define TASK2_PERIOD 100.0
@@ -61,6 +61,6 @@ typedef struct {
     int16_t prev; /* pointer to the previous TCB */
 } TCB;
 
-uint8_t* init_task_stack(void *stack_ptr, void (*addr)());
+uint8_t* init_task_stack(void* stack_ptr, void (*addr)());
 
 #endif // TASK_H

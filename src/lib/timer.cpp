@@ -2,7 +2,6 @@
 
 #include "include/timer.h"
 
-
 void schedule(void);
 void dispatch(void);
 void end_cycle(void);

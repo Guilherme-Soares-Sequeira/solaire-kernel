@@ -5,7 +5,7 @@
 
 /* clang-format off */
 
-#define MAX_STR_LEN      16
+#define MAX_STR_LEN      2
 #define MAX_TASKS        8
 #define MAX_DLINE        0x7FFFFFFF
 #define PRIORITY_LEVELS  255

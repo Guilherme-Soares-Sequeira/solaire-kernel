@@ -302,7 +302,7 @@ int16_t init_kernel(float tick, void (*task_main)(void)) {
     idx_freetcb = 0;
     util_fact = 0.0f;
     
-    solaire_log("Creating the main task in init_kernel...", LOG_FD_STDOUT);
+    //solaire_log("Creating the main task in init_kernel...", LOG_FD_STDOUT);
 
     int16_t idx_main = create("main", task_main, TASK_TYPE_APERIODIC, 10000.0, 10000.0);
 

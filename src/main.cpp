@@ -49,9 +49,17 @@ void task_main(void) {
         return;
     }
 
+    pin_md(LED1, OUTPUT);
+    pin_md(LED2, OUTPUT);
+    pin_md(LED3, OUTPUT);
+    pin_md(LED4, OUTPUT);
+    
     solaire_log("All tasks have been created successfully!", LOG_FD_STDOUT);
 
-    while (TRUE);
+    /* busy waiting */
+    while (TRUE) {
+        asm("nop");
+    }
 
     return;
 }
@@ -60,7 +68,7 @@ int main() {
     disable_interrupts();
     Serial.begin(BAUD_RATE);
    
-    solaire_log("Initializing hardware...", LOG_FD_STDOUT);
+    solaire_log(F("Initializing hardware..."), LOG_FD_STDOUT);
     set_timer_registers();
     solaire_log("Success!\n", LOG_FD_STDOUT);
         
