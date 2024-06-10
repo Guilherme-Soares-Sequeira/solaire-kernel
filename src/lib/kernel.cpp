@@ -89,12 +89,9 @@ int16_t guarantee(int16_t idx_task) {
 
     if (util_fact > 1.0) {
         util_fact -= tcb_vec[idx_task].utilf;
-
         solaire_log("Could not guarantee feasibility of task!", LOG_FD_STDOUT);
-
         return FALSE;
     }
-
     return TRUE;
 }
 
@@ -107,13 +104,8 @@ int16_t create(const char name[MAX_STR_LEN + 1], void (*addr)(), task_type type,
     Serial.println((uint16_t) addr);
     Serial.flush();
 
-    Serial.print("received *addr = ");
-    Serial.flush();
-    Serial.println((uint16_t) *addr);
-    Serial.flush();
-
     idx_task = pop(&idx_freetcb);
-    
+
     if (idx_task == NIL) {
         solaire_log("There are no free TCBs!", LOG_FD_STDERR);
 
@@ -136,9 +128,8 @@ int16_t create(const char name[MAX_STR_LEN + 1], void (*addr)(), task_type type,
     tcb_vec[idx_task].utilf = wcet / period;
     tcb_vec[idx_task].priority = (int16_t)period;
     tcb_vec[idx_task].dline = INT_FAST32_MAX + (int32_t)(period - PRIORITY_LEVELS);
-    tcb_vec[idx_task].stack_ptr = (uint8_t *)init_task_stack(
-        tcb_vec[idx_task].stack_ptr, tcb_vec[idx_task].addr);
-
+    tcb_vec[idx_task].stack_ptr = (uint8_t *)init_task_stack(tcb_vec[idx_task].stack_ptr, tcb_vec[idx_task].addr);
+    
     return idx_task;
 }
 
@@ -234,8 +225,11 @@ void schedule(void) {
     }
 }
 
-
 /// ----------------------- End of Section 3 ----------------------- ///
+
+uint16_t get_sp() {
+    return ((uint16_t)SPH << 8) | SPL;
+}
 
 void init_kernel(float tick, void (*task_main)(void)) {
     Serial.begin(BAUD_RATE);
@@ -246,8 +240,6 @@ void init_kernel(float tick, void (*task_main)(void)) {
 
     set_timer_registers();
 
-
-    
     time_unit = tick;
     for (unsigned int task_index = 0; task_index < MAX_TASKS - 1;
          task_index++) {
@@ -274,79 +266,41 @@ void init_kernel(float tick, void (*task_main)(void)) {
     }
 
     idx_exe = idx_main;
-
+    
     tcb_vec[idx_exe].state = TASK_STATE_EXE;
     stack_exe = tcb_vec[idx_exe].stack_ptr;
 
-    Serial.print("main_task = ");
-    Serial.flush();
-    Serial.println((uint16_t) task_main);
-    Serial.flush();
-
-    Serial.print("in tcb = ");
-    Serial.flush();
-    Serial.println((uint16_t) tcb_vec[idx_main].addr);
+    Serial.print("stack exe = ");
+    Serial.println((uint16_t) stack_exe, HEX);
     Serial.flush();
 
-    uint16_t sp = 0;
-    uint16_t a = 0;
-
-    Serial.print("&a = ");
+    uint16_t sp = get_sp();
+    Serial.print("sp2 = ");
+    Serial.println(sp, HEX);
     Serial.flush();
-    Serial.println((uint16_t) &a);
-    Serial.flush();
+    
+    //restore_ctx();
+    
+    //SPL = 0x34;
+    //Serial.print("spl = ");
+    //Serial.println(SPL, HEX);
+    //Serial.flush();
 
-    asm volatile (
-        "in %A0, __SP_L__ \n\t"
-        "in %B0, __SP_H__"
-        : "=r" (sp)
+    asm volatile("ldi r22,14                   \n\t"                              \
+                 "out __SP_H__, r22            \n\t"                              \
     );
 
-    Serial.print("&sp = ");
-    Serial.flush();
-    Serial.println((uint16_t) &sp);
-    Serial.flush();
-
-    Serial.print("sp = ");
-    Serial.flush();
-    Serial.println((uint16_t) sp);
+    Serial.print("sph = ");
+    Serial.println(SPH, HEX);
     Serial.flush();
 
-    uint16_t b = 0;
-
-    Serial.print("&b = ");
-    Serial.flush();
-    Serial.println((uint16_t) &b);
-    Serial.flush();
-
-    asm volatile (
-        "in %A0, __SP_L__ \n\t"
-        "in %B0, __SP_H__"
-        : "=r" (sp)
-    );
-
-    Serial.print("&sp = ");
-    Serial.flush();
-    Serial.println((uint16_t) &sp);
-    Serial.flush();
-
-    Serial.print("sp = ");
-    Serial.flush();
-    Serial.println((uint16_t) sp);
-    Serial.flush();
-
-    // restore_ctx();
-
-    /*
-
+    abort();
     asm ("ret");
 
     solaire_log("shit but in init_kernel", LOG_FD_STDERR);
     
     abort();
 
-    */
-   asm volatile("ret");
 }
 
 ISR(TIMER1_COMPA_vect, ISR_NAKED) {

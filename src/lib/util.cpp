@@ -8,6 +8,7 @@ void toggle_led(uint8_t led_pin) {
     dig_wr(led_pin, !dig_rd(led_pin));
 }
 
+/*
 void __solaire_log_fn(const __FlashStringHelper *str, log_fd fd) {
     const __FlashStringHelper *prefix;
 
@@ -26,9 +27,9 @@ void __solaire_log_fn(const __FlashStringHelper *str, log_fd fd) {
     
     Serial.flush();
 }
-
-void solaire_dynamic_log(const char* str, log_fd fd) {
-    Serial.print("[STDOUT] ");
+*/
+void solaire_log(const char* str, log_fd fd) {
+    Serial.print(fd == LOG_FD_STDOUT ? "[STDOUT] " : "[STDERR] ");
     Serial.println(str);
     Serial.flush();
 }

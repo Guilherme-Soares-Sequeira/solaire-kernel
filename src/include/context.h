@@ -13,6 +13,7 @@
                  "push r4                   \n\t"                              \
                  "push r5                   \n\t"                              \
                  "push r6                   \n\t"                              \
+                 "push r7                   \n\t"                              \
                  "push r8                   \n\t"                              \
                  "push r9                   \n\t"                              \
                  "push r10                  \n\t"                              \
@@ -45,13 +46,10 @@
                  "st x+, r0                 \n\t"                              \
                  );
 
-#define restore_ctx()                                                     \
-    asm volatile("lds r26, stack_exe        \n\t"                              \
-                 "lds r27, stack_exe + 1    \n\t"                              \
-                 "ld r28, x+                \n\t"                              \
-                 "out __SP_L__, r28         \n\t"                              \
-                 "ld r29, x+                \n\t"                              \
-                 "out __SP_H__, r29         \n\t"                              \
+#define restore_ctx()                                                          \
+    SPL = (uint8_t) (((uint16_t) stack_exe) & 0x00FF);                         \
+    SPH = (uint8_t) ((((uint16_t) stack_exe) >> 8) & 0x00FF);                  \
+    asm volatile("pop r31                   \n\t"                              \
                  "pop r30                   \n\t"                              \
                  "pop r29                   \n\t"                              \
                  "pop r28                   \n\t"                              \
