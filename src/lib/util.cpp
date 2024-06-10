@@ -29,7 +29,7 @@ void __solaire_log_fn(const __FlashStringHelper *str, log_fd fd) {
 }
 */
 void solaire_log(const char* str, log_fd fd) {
-    Serial.print(fd == LOG_FD_STDOUT ? "[STDOUT] " : "[STDERR] ");
+    Serial.print(fd == LOG_FD_STDOUT ? "OUT " : "ERR ");
     Serial.println(str);
     Serial.flush();
 }

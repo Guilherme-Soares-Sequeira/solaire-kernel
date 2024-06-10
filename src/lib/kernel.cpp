@@ -5,8 +5,9 @@
 #include "include/remaps.h"
 #include "include/timer.h"
 #include "include/util.h"
+#include "include/register.h"
 
-#define BAUD_RATE 115200
+#define BAUD_RATE 9600
 
 #define STACK_SIZE 128 // stack size in bytes
 
@@ -20,7 +21,7 @@ int16_t idx_idle;    /* index to head of idle queue        */
 int16_t idx_zombie;  /* index to head of zombie queue      */
 int16_t idx_freetcb; /* index to head of free TCB queue    */
 
-volatile uint8_t *volatile stack_exe;
+volatile uint8_t *volatile stack_exe = 0;
 
 int32_t sys_clock; /* system's clock number of ticks since system initialization */
 float time_unit;   /* time unit used for timer ticks */
@@ -101,7 +102,7 @@ int16_t create(const char name[MAX_STR_LEN + 1], void (*addr)(), task_type type,
 
     Serial.print("received addr = ");
     Serial.flush();
-    Serial.println((uint16_t) addr);
+    Serial.println((uint16_t) addr, HEX);
     Serial.flush();
 
     idx_task = pop(&idx_freetcb);
@@ -128,7 +129,7 @@ int16_t create(const char name[MAX_STR_LEN + 1], void (*addr)(), task_type type,
     tcb_vec[idx_task].utilf = wcet / period;
     tcb_vec[idx_task].priority = (int16_t)period;
     tcb_vec[idx_task].dline = INT_FAST32_MAX + (int32_t)(period - PRIORITY_LEVELS);
-    tcb_vec[idx_task].stack_ptr = (uint8_t *)init_task_stack(tcb_vec[idx_task].stack_ptr, tcb_vec[idx_task].addr);
+    tcb_vec[idx_task].stack_ptr = (uint8_t *) init_task_stack((uint8_t*) tcb_vec[idx_task].stack_ptr, tcb_vec[idx_task].addr);
     
     return idx_task;
 }
@@ -232,11 +233,8 @@ uint16_t get_sp() {
 }
 
 void init_kernel(float tick, void (*task_main)(void)) {
-    Serial.begin(BAUD_RATE);
-    
-    solaire_log("Hello", LOG_FD_STDOUT);
-
-    disable_interrupts();
+    // disable_interrupts();
+    Serial.begin(BAUD_RATE);    
 
     set_timer_registers();
 
@@ -244,11 +242,11 @@ void init_kernel(float tick, void (*task_main)(void)) {
     for (unsigned int task_index = 0; task_index < MAX_TASKS - 1;
          task_index++) {
         tcb_vec[task_index].next = task_index + 1;
-        tcb_vec[task_index].stack_ptr = &(stack_vec[task_index]);
+        tcb_vec[task_index].stack_ptr = stack_vec + (task_index * STACK_SIZE) - 1;
     }
 
     tcb_vec[MAX_TASKS - 1].next = NIL;
-    tcb_vec[MAX_TASKS - 1].stack_ptr = &(stack_vec[MAX_TASKS - 1]);
+    tcb_vec[MAX_TASKS - 1].stack_ptr = stack_vec + ((MAX_TASKS - 1) * STACK_SIZE) - 1;
 
     idx_ready = NIL;
     idx_idle = NIL;
@@ -270,32 +268,59 @@ void init_kernel(float tick, void (*task_main)(void)) {
     tcb_vec[idx_exe].state = TASK_STATE_EXE;
     stack_exe = tcb_vec[idx_exe].stack_ptr;
 
-    Serial.print("stack exe = ");
-    Serial.println((uint16_t) stack_exe, HEX);
+    Serial.print("instruction addr b4 = ");
+    Serial.print(*(stack_exe + 34), HEX);
+    Serial.println(*(stack_exe + 33), HEX);
     Serial.flush();
 
-    uint16_t sp = get_sp();
-    Serial.print("sp2 = ");
-    Serial.println(sp, HEX);
-    Serial.flush();
-    
     //restore_ctx();
+    SP = (uint16_t) stack_exe;
+
+    asm volatile ("pop r0");
+    asm volatile ("pop r0");
+    asm volatile ("pop r0");
+    asm volatile ("pop r0");
+    asm volatile ("pop r0");
+    asm volatile ("pop r0");
+    asm volatile ("pop r0");
+    asm volatile ("pop r0");
+    asm volatile ("pop r0");
+    asm volatile ("pop r0");
+    asm volatile ("pop r0");
+    asm volatile ("pop r0");
+    asm volatile ("pop r0");
+    asm volatile ("pop r0");
+    asm volatile ("pop r0");
+    asm volatile ("pop r0");
+    asm volatile ("pop r0");
+    asm volatile ("pop r0");
+    asm volatile ("pop r0");
+    asm volatile ("pop r0");
+    asm volatile ("pop r0");
+    asm volatile ("pop r0");
+    asm volatile ("pop r0");
+    asm volatile ("pop r0");
+    asm volatile ("pop r0");
+    asm volatile ("pop r0");
+    asm volatile ("pop r0");
+    asm volatile ("pop r0");
+    asm volatile ("pop r0");
+    asm volatile ("pop r0");
+    asm volatile ("pop r0");
+    asm volatile ("pop r0");
+    asm volatile ("pop r0");
+
+    asm volatile ("ret");
     
-    //SPL = 0x34;
-    //Serial.print("spl = ");
-    //Serial.println(SPL, HEX);
-    //Serial.flush();
-
-    asm volatile("ldi r22,14                   \n\t"                              \
-                 "out __SP_H__, r22            \n\t"                              \
-    );
-
-    Serial.print("sph = ");
-    Serial.println(SPH, HEX);
-    Serial.flush();
-
     abort();
-    asm ("ret");
+    /*
+    if ((SP - ((uint16_t) stack_exe)) != SAVED_REG_NUM) {
+         solaire_log("restctx fail", LOG_FD_STDERR);
+         abort();
+    }
+    */
+    
+    asm volatile ("ret");
 
     solaire_log("shit but in init_kernel", LOG_FD_STDERR);
     
@@ -310,7 +335,7 @@ ISR(TIMER1_COMPA_vect, ISR_NAKED) {
 
     solaire_log("Calling wake_up", LOG_FD_STDOUT);
     wake_up();
-    solaire_log("Returned from wake_up", LOG_FD_STDOUT);
+    solaire_log("Returned from wake_up", LOG_FD_STDERR);
 
     restore_ctx();
 
@@ -348,7 +373,6 @@ void end_cycle(void) {
 
     asm volatile("reti");
 }
-
 
 void activate(int16_t idx_task) {
     if (tcb_vec[idx_task].criticality == TASK_CRIT_HARD) {

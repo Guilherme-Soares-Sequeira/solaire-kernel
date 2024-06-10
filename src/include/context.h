@@ -47,8 +47,7 @@
                  );
 
 #define restore_ctx()                                                          \
-    SPL = (uint8_t) (((uint16_t) stack_exe) & 0x00FF);                         \
-    SPH = (uint8_t) ((((uint16_t) stack_exe) >> 8) & 0x00FF);                  \
+    SP = (uint16_t) stack_exe;                                                 \
     asm volatile("pop r31                   \n\t"                              \
                  "pop r30                   \n\t"                              \
                  "pop r29                   \n\t"                              \

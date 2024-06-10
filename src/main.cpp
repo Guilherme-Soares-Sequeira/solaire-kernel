@@ -19,7 +19,7 @@ void t3(void) { while (TRUE) { toggle_led(LED3); end_cycle(); } }
 void task_main(void) {
     disable_interrupts();
 
-    solaire_log("Creating tasks...\n", LOG_FD_STDOUT);
+    solaire_log("Creating tasks...\n", LOG_FD_STDERR);
 
     pin_md(LED1, OUTPUT);
     pin_md(LED2, OUTPUT);
@@ -47,6 +47,7 @@ void task_main(void) {
 
     return;
 }
+
 
 int main() {
     init_kernel(TICK_DURATION_MS, task_main);
