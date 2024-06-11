@@ -20,6 +20,7 @@ int16_t idx_ready;   /* index to head of ready tasks queue */
 int16_t idx_idle;    /* index to head of idle queue        */
 int16_t idx_zombie;  /* index to head of zombie queue      */
 int16_t idx_freetcb; /* index to head of free TCB queue    */
+uint8_t ready_dirty = 0; /* dirty flag for ready queue        */
 
 volatile uint8_t *volatile stack_exe = 0;
 
@@ -30,7 +31,6 @@ float util_fact;   /* cpu utilization factor         */
 // ------------------------ Low Level Utils ------------------------
 
 void insert(int16_t idx_task, int16_t *queue, task_state state) {
-    dig_wr(LED2, HIGH);
     int32_t deadline;
     int16_t idx_prev_tcb;
     int16_t idx_next_tcb;
@@ -41,16 +41,9 @@ void insert(int16_t idx_task, int16_t *queue, task_state state) {
 
     tcb_vec[idx_task].state = state;
 
-    _delay_ms(500);
-    toggle_led(LED3);
-    _delay_ms(500);
-    
     while ((idx_next_tcb != NIL) && (deadline >= tcb_vec[idx_next_tcb].dline)) {        
         idx_prev_tcb = idx_next_tcb;
         idx_next_tcb = tcb_vec[idx_next_tcb].next;
-        _delay_ms(500);
-        toggle_led(LED4);
-        _delay_ms(500);
     }
 
     if (idx_prev_tcb != NIL) {
@@ -107,11 +100,6 @@ int16_t guarantee(int16_t idx_task) {
 int16_t create(const char name[MAX_STR_LEN + 1], void (*addr)(), task_type type, task_crit criticality,
                float period, float wcet) {
     int16_t idx_task = 0;
-
-    Serial.print("received addr = ");
-    Serial.flush();
-    Serial.println((uint16_t) addr, HEX);
-    Serial.flush();
 
     idx_task = pop(&idx_freetcb);
 
@@ -179,7 +167,7 @@ void wake_up(void) {
         count++;
     }
 
-    if (count > 0) {
+    if (count > 0 || 1 == ready_dirty) {
         schedule();
     }
 
@@ -224,6 +212,7 @@ void dispatch(void) {
 }
 
 void schedule(void) {
+    ready_dirty = 0;
     if (firstdline(idx_ready) < tcb_vec[idx_exe].dline) {
         tcb_vec[idx_exe].stack_ptr = stack_exe;
 
@@ -235,21 +224,12 @@ void schedule(void) {
 
 /// ----------------------- End of Section 3 ----------------------- ///
 
-uint16_t get_sp() {
-    return ((uint16_t)SPH << 8) | SPL;
-}
-
 void init_kernel(float tick, void (*task_main)(void)) {
     disable_interrupts();
     Serial.begin(BAUD_RATE);    
 
     Serial.println("In init_kernel");
     Serial.flush();
-
-    pin_md(LED1, OUTPUT);
-    pin_md(LED2, OUTPUT);
-    pin_md(LED3, OUTPUT);
-    pin_md(LED4, OUTPUT);
 
     set_timer_registers();
 
@@ -272,37 +252,14 @@ void init_kernel(float tick, void (*task_main)(void)) {
     int16_t idx_main =
         create("M", task_main, TASK_TYPE_APERIODIC, TASK_CRIT_NRT, 10000.0, 10000.0);
 
-    dig_wr(LED1, HIGH);
-    Serial.print("idx main = ");
-    Serial.println(idx_main);
-    Serial.flush();
-    
     idx_exe = idx_main;
     
     tcb_vec[idx_exe].state = TASK_STATE_EXE;
     stack_exe = tcb_vec[idx_exe].stack_ptr;
 
-    Serial.print("stack_exe + sm = ");
-    Serial.println(*(((uint8_t*) stack_exe) + 35), HEX);
-    Serial.flush();
-
-    dig_wr(LED3, HIGH);
-    
     restore_ctx();
     
-    dig_wr(LED4, HIGH);
-    Serial.print("val = ");
-    Serial.println(*(((uint8_t*) SP)+2), HEX);
-    Serial.flush();
-
     asm volatile ("ret");
-    
-    /*
-    if ((SP - ((uint16_t) stack_exe)) != SAVED_REG_NUM) {
-         solaire_log("restctx fail", LOG_FD_STDERR);
-         abort();
-    }
-    */
     
     solaire_log("shit but in init_kernel", LOG_FD_STDERR);
     
@@ -312,17 +269,13 @@ void init_kernel(float tick, void (*task_main)(void)) {
 
 ISR(TIMER1_COMPA_vect, ISR_NAKED) {
     disable_interrupts();
-
     save_ctx();
 
-    solaire_log("Calling wake_up", LOG_FD_STDOUT);
+    toggle_led(LED1);
+    //solaire_log("Calling wake_up", LOG_FD_STDOUT);
     wake_up();
-    solaire_log("Returned from wake_up", LOG_FD_STDERR);
-
+    //solaire_log("Returned from wake_up", LOG_FD_STDERR);
     restore_ctx();
-
-    enable_interrupts();
-
     asm volatile("reti");
 }
 
@@ -357,6 +310,7 @@ void end_cycle(void) {
 }
 
 void activate(int16_t idx_task) {
+    ready_dirty = 1;
     if (tcb_vec[idx_task].criticality == TASK_CRIT_HARD) {
         tcb_vec[idx_task].dline = sys_clock + (int32_t)tcb_vec[idx_task].period;
     }
