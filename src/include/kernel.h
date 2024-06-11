@@ -55,4 +55,6 @@ void schedule(void);
 
 void init_kernel(float tick, void (*task_main)(void)) __attribute__((naked));
 
+uint8_t *pxPortInitialiseStack( uint8_t* pxTopOfStack, void (*pxCode)(), void *pvParameters );
+
 #endif // KERNEL_H

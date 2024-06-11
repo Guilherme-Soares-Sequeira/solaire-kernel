@@ -30,6 +30,7 @@ float util_fact;   /* cpu utilization factor         */
 // ------------------------ Low Level Utils ------------------------
 
 void insert(int16_t idx_task, int16_t *queue, task_state state) {
+    dig_wr(LED2, HIGH);
     int32_t deadline;
     int16_t idx_prev_tcb;
     int16_t idx_next_tcb;
@@ -40,9 +41,16 @@ void insert(int16_t idx_task, int16_t *queue, task_state state) {
 
     tcb_vec[idx_task].state = state;
 
+    _delay_ms(500);
+    toggle_led(LED3);
+    _delay_ms(500);
+    
     while ((idx_next_tcb != NIL) && (deadline >= tcb_vec[idx_next_tcb].dline)) {        
         idx_prev_tcb = idx_next_tcb;
         idx_next_tcb = tcb_vec[idx_next_tcb].next;
+        _delay_ms(500);
+        toggle_led(LED4);
+        _delay_ms(500);
     }
 
     if (idx_prev_tcb != NIL) {
@@ -109,7 +117,6 @@ int16_t create(const char name[MAX_STR_LEN + 1], void (*addr)(), task_type type,
 
     if (idx_task == NIL) {
         solaire_log("There are no free TCBs!", LOG_FD_STDERR);
-
         exit(KERNEL_STATE_NO_TCB);
     }
 
@@ -233,8 +240,16 @@ uint16_t get_sp() {
 }
 
 void init_kernel(float tick, void (*task_main)(void)) {
-    // disable_interrupts();
+    disable_interrupts();
     Serial.begin(BAUD_RATE);    
+
+    Serial.println("In init_kernel");
+    Serial.flush();
+
+    pin_md(LED1, OUTPUT);
+    pin_md(LED2, OUTPUT);
+    pin_md(LED3, OUTPUT);
+    pin_md(LED4, OUTPUT);
 
     set_timer_registers();
 
@@ -242,11 +257,11 @@ void init_kernel(float tick, void (*task_main)(void)) {
     for (unsigned int task_index = 0; task_index < MAX_TASKS - 1;
          task_index++) {
         tcb_vec[task_index].next = task_index + 1;
-        tcb_vec[task_index].stack_ptr = stack_vec + (task_index * STACK_SIZE) - 1;
+        tcb_vec[task_index].stack_ptr = stack_vec + ((task_index+1) * STACK_SIZE) - 1;
     }
 
     tcb_vec[MAX_TASKS - 1].next = NIL;
-    tcb_vec[MAX_TASKS - 1].stack_ptr = stack_vec + ((MAX_TASKS - 1) * STACK_SIZE) - 1;
+    tcb_vec[MAX_TASKS - 1].stack_ptr = stack_vec + ((MAX_TASKS) * STACK_SIZE) - 1;
 
     idx_ready = NIL;
     idx_idle = NIL;
@@ -256,63 +271,72 @@ void init_kernel(float tick, void (*task_main)(void)) {
 
     int16_t idx_main =
         create("M", task_main, TASK_TYPE_APERIODIC, TASK_CRIT_NRT, 10000.0, 10000.0);
+
+    dig_wr(LED1, HIGH);
+    Serial.print("idx main = ");
+    Serial.println(idx_main);
+    Serial.flush();
     
-    if (idx_main != EXIT_SUCCESS) {
-        solaire_log("Error while initializing main task!", LOG_FD_STDERR);
-
-        abort();
-    }
-
     idx_exe = idx_main;
     
     tcb_vec[idx_exe].state = TASK_STATE_EXE;
     stack_exe = tcb_vec[idx_exe].stack_ptr;
 
-    Serial.print("instruction addr b4 = ");
-    Serial.print(*(stack_exe + 34), HEX);
-    Serial.println(*(stack_exe + 33), HEX);
+    Serial.print("stack_exe + sm = ");
+    Serial.println(*(((uint8_t*) stack_exe) + 35), HEX);
     Serial.flush();
 
-    //restore_ctx();
-    SP = (uint16_t) stack_exe;
+    dig_wr(LED3, HIGH);
 
-    asm volatile ("pop r0");
-    asm volatile ("pop r0");
-    asm volatile ("pop r0");
-    asm volatile ("pop r0");
-    asm volatile ("pop r0");
-    asm volatile ("pop r0");
-    asm volatile ("pop r0");
-    asm volatile ("pop r0");
-    asm volatile ("pop r0");
-    asm volatile ("pop r0");
-    asm volatile ("pop r0");
-    asm volatile ("pop r0");
-    asm volatile ("pop r0");
-    asm volatile ("pop r0");
-    asm volatile ("pop r0");
-    asm volatile ("pop r0");
-    asm volatile ("pop r0");
-    asm volatile ("pop r0");
-    asm volatile ("pop r0");
-    asm volatile ("pop r0");
-    asm volatile ("pop r0");
-    asm volatile ("pop r0");
-    asm volatile ("pop r0");
-    asm volatile ("pop r0");
-    asm volatile ("pop r0");
-    asm volatile ("pop r0");
-    asm volatile ("pop r0");
-    asm volatile ("pop r0");
-    asm volatile ("pop r0");
-    asm volatile ("pop r0");
-    asm volatile ("pop r0");
-    asm volatile ("pop r0");
-    asm volatile ("pop r0");
+    asm volatile("ldi r26, lo8(stack_exe) \n\t" \
+                 "ldi r27, hi8(stack_exe) \n\t" \
+                 "ld r28, x+ \n\t" \
+                 "out __SP_L__, r28 \n\t" \
+                 "ld r29, x+ \n\t" \
+                 "out __SP_H__, r29 \n\t" \
+                 "pop r31                   \n\t"                              \
+                 "pop r30                   \n\t"                              \
+                 "pop r29                   \n\t"                              \
+                 "pop r28                   \n\t"                              \
+                 "pop r27                   \n\t"                              \
+                 "pop r26                   \n\t"                              \
+                 "pop r25                   \n\t"                              \
+                 "pop r24                   \n\t"                              \
+                 "pop r23                   \n\t"                              \
+                 "pop r22                   \n\t"                              \
+                 "pop r21                   \n\t"                              \
+                 "pop r20                   \n\t"                              \
+                 "pop r19                   \n\t"                              \
+                 "pop r18                   \n\t"                              \
+                 "pop r17                   \n\t"                              \
+                 "pop r16                   \n\t"                              \
+                 "pop r15                   \n\t"                              \
+                 "pop r14                   \n\t"                              \
+                 "pop r13                   \n\t"                              \
+                 "pop r12                   \n\t"                              \
+                 "pop r11                   \n\t"                              \
+                 "pop r10                   \n\t"                              \
+                 "pop r9                    \n\t"                              \
+                 "pop r8                    \n\t"                              \
+                 "pop r7                    \n\t"                              \
+                 "pop r6                    \n\t"                              \
+                 "pop r5                    \n\t"                              \
+                 "pop r4                    \n\t"                              \
+                 "pop r3                    \n\t"                              \
+                 "pop r2                    \n\t"                              \
+                 "pop r1                    \n\t"                              \
+                 "pop r0                    \n\t"                              \
+                 "out __SREG__, r0          \n\t"                              \
+                 /*"pop r0                    \n\t"                              \*/
+                 );
+    
+    dig_wr(LED4, HIGH);
+    Serial.print("val = ");
+    Serial.println(*(((uint8_t*) SP)+1), HEX);
+    Serial.flush();
 
     asm volatile ("ret");
     
-    abort();
     /*
     if ((SP - ((uint16_t) stack_exe)) != SAVED_REG_NUM) {
          solaire_log("restctx fail", LOG_FD_STDERR);
@@ -320,8 +344,6 @@ void init_kernel(float tick, void (*task_main)(void)) {
     }
     */
     
-    asm volatile ("ret");
-
     solaire_log("shit but in init_kernel", LOG_FD_STDERR);
     
     abort();

@@ -65,6 +65,6 @@ typedef struct {
     int16_t prev; /* pointer to the previous TCB */
 } TCB;
 
-volatile uint8_t* init_task_stack(volatile uint8_t* stack_ptr, void (*addr)());
+uint8_t* init_task_stack(uint8_t* stack_ptr, void (*addr)());
 
 #endif // TASK_H

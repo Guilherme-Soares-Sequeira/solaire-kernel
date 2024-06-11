@@ -2,10 +2,6 @@
 
 #include "include/timer.h"
 
-void schedule(void);
-void dispatch(void);
-void end_cycle(void);
-
 void reset_timer1_control_registers() {
     TCCR1A = 0;
     TCCR1B = 0;
