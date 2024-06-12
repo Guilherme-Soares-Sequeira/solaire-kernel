@@ -11,6 +11,19 @@
 #define PRIORITY_LEVELS  255
 #define LIFETIME         (MAX_DLINE - PRIORITY_LEVELS)
 
+extern int16_t idx_exe;     /* index to the executing process     */
+extern int16_t idx_ready;   /* index to head of ready tasks queue */
+extern int16_t idx_idle;    /* index to head of idle queue        */
+extern int16_t idx_zombie;  /* index to head of zombie queue      */
+extern int16_t idx_freetcb; /* index to head of free TCB queue    */
+extern uint8_t ready_dirty; /* dirty flag for ready queue        */
+
+extern volatile uint8_t *volatile stack_exe;
+
+extern int16_t sys_clock; /* system's clock number of ticks since system initialization */
+extern float time_unit;   /* time unit used for timer ticks */
+extern float util_fact;   /* cpu utilization factor         */
+
 typedef enum {
     KERNEL_STATE_OK            =  0,
     KERNEL_STATE_TIME_OVERFLOW = -1,

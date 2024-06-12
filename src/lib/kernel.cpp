@@ -24,7 +24,7 @@ uint8_t ready_dirty = 0; /* dirty flag for ready queue        */
 
 volatile uint8_t *volatile stack_exe = 0;
 
-int16_t sys_clock; /* system's clock number of ticks since system initialization */
+int16_t sys_clock = 0; /* system's clock number of ticks since system initialization */
 float time_unit;   /* time unit used for timer ticks */
 float util_fact;   /* cpu utilization factor         */
 
@@ -148,15 +148,11 @@ void wake_up(void) {
     sys_clock++;
 
     if (sys_clock >= LIFETIME) {
-        solaire_log("The system time has expired!", LOG_FD_STDERR);
-
         exit(KERNEL_STATE_TIME_EXPIRED);
     }
 
     if (tcb_vec[idx_exe].criticality == TASK_CRIT_HARD) {
         if (sys_clock > tcb_vec[idx_exe].dline) {
-            solaire_log("Timer overflow!", LOG_FD_STDERR);
-
             exit(KERNEL_STATE_TIME_OVERFLOW);
         }
     }
@@ -237,7 +233,7 @@ void schedule(void) {
 void init_kernel(float tick, void (*tsk_ptr)(void)) {
     disable_interrupts();
 
-    Serial.begin(BAUD_RATE);
+    // // Serial.begin(BAUD_RATE);
 
     pinMode(LED1, OUTPUT);
     pinMode(LED2, OUTPUT);
@@ -249,10 +245,10 @@ void init_kernel(float tick, void (*tsk_ptr)(void)) {
     dig_wr(LED3, LOW);
     dig_wr(LED4, LOW);
 
-    Serial.begin(BAUD_RATE);    
+    // Serial.begin(BAUD_RATE);    
 
-    Serial.println("In init_kernel");
-    Serial.flush();
+    // Serial.println("In init_kernel");
+    // Serial.flush();
 
     set_timer_registers();
 
