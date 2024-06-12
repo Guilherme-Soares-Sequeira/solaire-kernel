@@ -28,7 +28,7 @@ int16_t extract(int16_t idx_task, int16_t *queue);
 
 int16_t pop(int16_t *queue);
 
-int32_t firstdline(int16_t head);
+int16_t firstdline(int16_t head);
 
 int16_t empty(int16_t head);
 

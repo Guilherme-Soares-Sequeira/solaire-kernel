@@ -24,14 +24,14 @@ uint8_t ready_dirty = 0; /* dirty flag for ready queue        */
 
 volatile uint8_t *volatile stack_exe = 0;
 
-int32_t sys_clock; /* system's clock number of ticks since system initialization */
+int16_t sys_clock; /* system's clock number of ticks since system initialization */
 float time_unit;   /* time unit used for timer ticks */
 float util_fact;   /* cpu utilization factor         */
 
 // ------------------------ Low Level Utils ------------------------
 
 void insert(int16_t idx_task, int16_t *queue, task_state state) {
-    int32_t deadline;
+    int16_t deadline;
     int16_t idx_prev_tcb;
     int16_t idx_next_tcb;
 
@@ -76,7 +76,7 @@ int16_t pop(int16_t *queue) {
     return head;
 }
 
-int32_t firstdline(int16_t head) { return tcb_vec[head].dline; }
+int16_t firstdline(int16_t head) { return tcb_vec[head].dline; }
 
 int16_t empty(int16_t head) {
     if (head == NIL) {
@@ -125,9 +125,9 @@ int16_t create(const char name[MAX_STR_LEN + 1], void (*addr)(), task_type type,
     tcb_vec[idx_task].priority = (int16_t)period;
 
     if (type == TASK_TYPE_PERIODIC) {
-        tcb_vec[idx_task].dline = (int32_t)period;
+        tcb_vec[idx_task].dline = (int16_t)period;
     } else if (type == TASK_TYPE_MAIN) {
-        tcb_vec[idx_task].dline = INT_FAST32_MAX;
+        tcb_vec[idx_task].dline = INT_FAST16_MAX;
     } else {
         dig_wr(LED1, LOW);
         dig_wr(LED2, HIGH);
@@ -169,10 +169,8 @@ void wake_up(void) {
     }
 
     while (!empty(idx_idle) && (firstdline(idx_idle) <= sys_clock)) {
-        solaire_log("The idle queue is not empty", LOG_FD_STDOUT);
-
         idx_task = pop(&idx_idle);
-        tcb_vec[idx_task].dline += (int32_t)tcb_vec[idx_task].period;
+        tcb_vec[idx_task].dline += (int16_t)tcb_vec[idx_task].period;
 
         insert(idx_task, &idx_ready, TASK_STATE_READY);
 
@@ -311,14 +309,14 @@ void end_cycle(void) {
 
     save_ctx();
 
-    int32_t deadline;
+    int16_t deadline;
 
     deadline = tcb_vec[idx_exe].dline;
 
     if (sys_clock < deadline) {
         insert(idx_exe, &idx_idle, TASK_STATE_IDLE);
     } else {
-        deadline += (int32_t)tcb_vec[idx_exe].period;
+        deadline += (int16_t)tcb_vec[idx_exe].period;
 
         tcb_vec[idx_exe].dline = deadline;
 
@@ -337,7 +335,7 @@ void end_cycle(void) {
 void activate(int16_t idx_task) {
     ready_dirty = 1;
     if (tcb_vec[idx_task].criticality == TASK_CRIT_HARD) {
-        tcb_vec[idx_task].dline = sys_clock + (int32_t)tcb_vec[idx_task].period;
+        tcb_vec[idx_task].dline = sys_clock + (int16_t)tcb_vec[idx_task].period;
     }
 
     insert(idx_task, &idx_ready, TASK_STATE_READY);

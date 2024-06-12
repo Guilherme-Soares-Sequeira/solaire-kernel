@@ -12,7 +12,7 @@
 #define TASK2_NAME "T2"
 #define TASK3_NAME "T3"
 
-#define TASK1_PERIOD  250.0
+#define TASK1_PERIOD 250.0
 #define TASK2_PERIOD 500.0
 #define TASK3_PERIOD 1000.0
 
@@ -52,7 +52,7 @@ typedef struct {
     task_state state;      /* task state                     */
     task_crit criticality; /* task criticality */
 
-    int32_t dline;    /* task absolute deadline */
+    int16_t dline;    /* task absolute deadline */
 
     int16_t period;   /* task period                         */
     int16_t priority; /* task priority                       */
