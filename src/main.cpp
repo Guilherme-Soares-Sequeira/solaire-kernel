@@ -12,7 +12,14 @@
 #include "include/kernel.h"
 
 
-void t1(void) { while (TRUE) { toggle_led(LED2); end_cycle(); } }
+void t1(void) { 
+    dig_wr(LED2, HIGH); // disable led 2 first time t1 is run
+    while (TRUE) {
+        toggle_led(LED3);
+        end_cycle();
+        }
+    
+}
 void t2(void) { while (TRUE) { toggle_led(LED3); end_cycle(); } }
 void t3(void) { while (TRUE) { toggle_led(LED4); end_cycle(); } }
 
@@ -40,8 +47,8 @@ void task_main(void) {
     Serial.flush();
     
     activate(idx_t1);
-    activate(idx_t2);
-    activate(idx_t3);     
+    //activate(idx_t2);
+    //activate(idx_t3);     
     
     Serial.println("All tasks have been activated successfully!");
     Serial.flush();
@@ -49,6 +56,8 @@ void task_main(void) {
     enable_interrupts();
     /* busy waiting */
     while (TRUE) {
+        toggle_led(LED4);
+        _delay_ms(50);
         asm volatile("nop");
     }
 

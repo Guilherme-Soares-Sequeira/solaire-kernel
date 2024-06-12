@@ -27,7 +27,8 @@
 typedef enum {
     TASK_TYPE_PERIODIC = 0,
     TASK_TYPE_SPORADIC = 1,
-    TASK_TYPE_APERIODIC = 2
+    TASK_TYPE_APERIODIC = 2,
+    TASK_TYPE_MAIN = 3
 } task_type;
 
 typedef enum {

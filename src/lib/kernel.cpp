@@ -123,7 +123,19 @@ int16_t create(const char name[MAX_STR_LEN + 1], void (*addr)(), task_type type,
     tcb_vec[idx_task].wcet = (int16_t)(wcet / time_unit);
     tcb_vec[idx_task].utilf = wcet / period;
     tcb_vec[idx_task].priority = (int16_t)period;
-    tcb_vec[idx_task].dline = INT_FAST32_MAX + (int32_t)(period - PRIORITY_LEVELS);
+
+    if (type == TASK_TYPE_PERIODIC) {
+        tcb_vec[idx_task].dline = (int32_t)period;
+    } else if (type == TASK_TYPE_MAIN) {
+        tcb_vec[idx_task].dline = INT_FAST32_MAX;
+    } else {
+        dig_wr(LED1, LOW);
+        dig_wr(LED2, HIGH);
+        dig_wr(LED3, HIGH);
+        dig_wr(LED4, LOW);
+        abort();
+    }
+
     tcb_vec[idx_task].stack_ptr = (uint8_t *) init_task_stack((uint8_t*) tcb_vec[idx_task].stack_ptr, tcb_vec[idx_task].addr);
     
     return idx_task;
@@ -224,8 +236,21 @@ void schedule(void) {
 
 /// ----------------------- End of Section 3 ----------------------- ///
 
-void init_kernel(float tick, void (*task_main)(void)) {
+void init_kernel(float tick, void (*tsk_ptr)(void)) {
     disable_interrupts();
+
+    Serial.begin(BAUD_RATE);
+
+    pinMode(LED1, OUTPUT);
+    pinMode(LED2, OUTPUT);
+    pinMode(LED3, OUTPUT);
+    pinMode(LED4, OUTPUT);
+
+    dig_wr(LED1, LOW);
+    dig_wr(LED2, LOW);
+    dig_wr(LED3, LOW);
+    dig_wr(LED4, LOW);
+
     Serial.begin(BAUD_RATE);    
 
     Serial.println("In init_kernel");
@@ -250,7 +275,7 @@ void init_kernel(float tick, void (*task_main)(void)) {
     util_fact = 0.0f;
 
     int16_t idx_main =
-        create("M", task_main, TASK_TYPE_APERIODIC, TASK_CRIT_NRT, 10000.0, 10000.0);
+        create("M", tsk_ptr, TASK_TYPE_MAIN, TASK_CRIT_NRT, 10000.0, 10000.0);
 
     idx_exe = idx_main;
     
