@@ -12,7 +12,7 @@
 #define TASK2_NAME "T2"
 #define TASK3_NAME "T3"
 
-#define TASK1_PERIOD  250.0
+#define TASK1_PERIOD 250.0
 #define TASK2_PERIOD 500.0
 #define TASK3_PERIOD 1000.0
 
@@ -27,7 +27,8 @@
 typedef enum {
     TASK_TYPE_PERIODIC = 0,
     TASK_TYPE_SPORADIC = 1,
-    TASK_TYPE_APERIODIC = 2
+    TASK_TYPE_APERIODIC = 2,
+    TASK_TYPE_MAIN = 3
 } task_type;
 
 typedef enum {
@@ -51,7 +52,7 @@ typedef struct {
     task_state state;      /* task state                     */
     task_crit criticality; /* task criticality */
 
-    int32_t dline;    /* task absolute deadline */
+    int16_t dline;    /* task absolute deadline */
 
     int16_t period;   /* task period                         */
     int16_t priority; /* task priority                       */
@@ -65,6 +66,6 @@ typedef struct {
     int16_t prev; /* pointer to the previous TCB */
 } TCB;
 
-volatile uint8_t* init_task_stack(volatile uint8_t* stack_ptr, void (*addr)());
+uint8_t* init_task_stack(uint8_t* stack_ptr, void (*addr)());
 
 #endif // TASK_H

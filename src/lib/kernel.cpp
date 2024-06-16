@@ -5,8 +5,9 @@
 #include "include/remaps.h"
 #include "include/timer.h"
 #include "include/util.h"
+#include "include/register.h"
 
-#define BAUD_RATE 115200
+#define BAUD_RATE 9600
 
 #define STACK_SIZE 128 // stack size in bytes
 
@@ -19,17 +20,18 @@ int16_t idx_ready;   /* index to head of ready tasks queue */
 int16_t idx_idle;    /* index to head of idle queue        */
 int16_t idx_zombie;  /* index to head of zombie queue      */
 int16_t idx_freetcb; /* index to head of free TCB queue    */
+uint8_t ready_dirty = 0; /* dirty flag for ready queue        */
 
-volatile uint8_t *volatile stack_exe;
+volatile uint8_t *volatile stack_exe = 0;
 
-int32_t sys_clock; /* system's clock number of ticks since system initialization */
+int16_t sys_clock = 0; /* system's clock number of ticks since system initialization */
 float time_unit;   /* time unit used for timer ticks */
 float util_fact;   /* cpu utilization factor         */
 
 // ------------------------ Low Level Utils ------------------------
 
 void insert(int16_t idx_task, int16_t *queue, task_state state) {
-    int32_t deadline;
+    int16_t deadline;
     int16_t idx_prev_tcb;
     int16_t idx_next_tcb;
 
@@ -74,7 +76,7 @@ int16_t pop(int16_t *queue) {
     return head;
 }
 
-int32_t firstdline(int16_t head) { return tcb_vec[head].dline; }
+int16_t firstdline(int16_t head) { return tcb_vec[head].dline; }
 
 int16_t empty(int16_t head) {
     if (head == NIL) {
@@ -89,12 +91,9 @@ int16_t guarantee(int16_t idx_task) {
 
     if (util_fact > 1.0) {
         util_fact -= tcb_vec[idx_task].utilf;
-
         solaire_log("Could not guarantee feasibility of task!", LOG_FD_STDOUT);
-
         return FALSE;
     }
-
     return TRUE;
 }
 
@@ -102,21 +101,10 @@ int16_t create(const char name[MAX_STR_LEN + 1], void (*addr)(), task_type type,
                float period, float wcet) {
     int16_t idx_task = 0;
 
-    Serial.print("received addr = ");
-    Serial.flush();
-    Serial.println((uint16_t) addr);
-    Serial.flush();
-
-    Serial.print("received *addr = ");
-    Serial.flush();
-    Serial.println((uint16_t) *addr);
-    Serial.flush();
-
     idx_task = pop(&idx_freetcb);
-    
+
     if (idx_task == NIL) {
         solaire_log("There are no free TCBs!", LOG_FD_STDERR);
-
         exit(KERNEL_STATE_NO_TCB);
     }
 
@@ -135,10 +123,21 @@ int16_t create(const char name[MAX_STR_LEN + 1], void (*addr)(), task_type type,
     tcb_vec[idx_task].wcet = (int16_t)(wcet / time_unit);
     tcb_vec[idx_task].utilf = wcet / period;
     tcb_vec[idx_task].priority = (int16_t)period;
-    tcb_vec[idx_task].dline = INT_FAST32_MAX + (int32_t)(period - PRIORITY_LEVELS);
-    tcb_vec[idx_task].stack_ptr = (uint8_t *)init_task_stack(
-        tcb_vec[idx_task].stack_ptr, tcb_vec[idx_task].addr);
 
+    if (type == TASK_TYPE_PERIODIC) {
+        tcb_vec[idx_task].dline = (int16_t)period;
+    } else if (type == TASK_TYPE_MAIN) {
+        tcb_vec[idx_task].dline = INT_FAST16_MAX;
+    } else {
+        dig_wr(LED1, LOW);
+        dig_wr(LED2, HIGH);
+        dig_wr(LED3, HIGH);
+        dig_wr(LED4, LOW);
+        abort();
+    }
+
+    tcb_vec[idx_task].stack_ptr = (uint8_t *) init_task_stack((uint8_t*) tcb_vec[idx_task].stack_ptr, tcb_vec[idx_task].addr);
+    
     return idx_task;
 }
 
@@ -149,15 +148,11 @@ void wake_up(void) {
     sys_clock++;
 
     if (sys_clock >= LIFETIME) {
-        solaire_log("The system time has expired!", LOG_FD_STDERR);
-
         exit(KERNEL_STATE_TIME_EXPIRED);
     }
 
     if (tcb_vec[idx_exe].criticality == TASK_CRIT_HARD) {
         if (sys_clock > tcb_vec[idx_exe].dline) {
-            solaire_log("Timer overflow!", LOG_FD_STDERR);
-
             exit(KERNEL_STATE_TIME_OVERFLOW);
         }
     }
@@ -170,17 +165,15 @@ void wake_up(void) {
     }
 
     while (!empty(idx_idle) && (firstdline(idx_idle) <= sys_clock)) {
-        solaire_log("The idle queue is not empty", LOG_FD_STDOUT);
-
         idx_task = pop(&idx_idle);
-        tcb_vec[idx_task].dline += (int32_t)tcb_vec[idx_task].period;
+        tcb_vec[idx_task].dline += (int16_t)tcb_vec[idx_task].period;
 
         insert(idx_task, &idx_ready, TASK_STATE_READY);
 
         count++;
     }
 
-    if (count > 0) {
+    if (count > 0 || 1 == ready_dirty) {
         schedule();
     }
 
@@ -225,6 +218,7 @@ void dispatch(void) {
 }
 
 void schedule(void) {
+    ready_dirty = 0;
     if (firstdline(idx_ready) < tcb_vec[idx_exe].dline) {
         tcb_vec[idx_exe].stack_ptr = stack_exe;
 
@@ -234,29 +228,39 @@ void schedule(void) {
     }
 }
 
-
 /// ----------------------- End of Section 3 ----------------------- ///
 
-void init_kernel(float tick, void (*task_main)(void)) {
-    Serial.begin(BAUD_RATE);
-    
-    solaire_log("Hello", LOG_FD_STDOUT);
-
+void init_kernel(float tick, void (*tsk_ptr)(void)) {
     disable_interrupts();
+
+    // // Serial.begin(BAUD_RATE);
+
+    pinMode(LED1, OUTPUT);
+    pinMode(LED2, OUTPUT);
+    pinMode(LED3, OUTPUT);
+    pinMode(LED4, OUTPUT);
+
+    dig_wr(LED1, LOW);
+    dig_wr(LED2, LOW);
+    dig_wr(LED3, LOW);
+    dig_wr(LED4, LOW);
+
+    // Serial.begin(BAUD_RATE);    
+
+    // Serial.println("In init_kernel");
+    // Serial.flush();
 
     set_timer_registers();
 
-
-    
     time_unit = tick;
     for (unsigned int task_index = 0; task_index < MAX_TASKS - 1;
          task_index++) {
         tcb_vec[task_index].next = task_index + 1;
-        tcb_vec[task_index].stack_ptr = &(stack_vec[task_index]);
+        tcb_vec[task_index].stack_ptr = stack_vec + ((task_index+1) * STACK_SIZE) - 1;
     }
 
     tcb_vec[MAX_TASKS - 1].next = NIL;
-    tcb_vec[MAX_TASKS - 1].stack_ptr = &(stack_vec[MAX_TASKS - 1]);
+    tcb_vec[MAX_TASKS - 1].stack_ptr = stack_vec + ((MAX_TASKS) * STACK_SIZE) - 1;
 
     idx_ready = NIL;
     idx_idle = NIL;
@@ -265,103 +269,32 @@ void init_kernel(float tick, void (*task_main)(void)) {
     util_fact = 0.0f;
 
     int16_t idx_main =
-        create("M", task_main, TASK_TYPE_APERIODIC, TASK_CRIT_NRT, 10000.0, 10000.0);
-    
-    if (idx_main != EXIT_SUCCESS) {
-        solaire_log("Error while initializing main task!", LOG_FD_STDERR);
-
-        abort();
-    }
+        create("M", tsk_ptr, TASK_TYPE_MAIN, TASK_CRIT_NRT, 10000.0, 10000.0);
 
     idx_exe = idx_main;
-
+    
     tcb_vec[idx_exe].state = TASK_STATE_EXE;
     stack_exe = tcb_vec[idx_exe].stack_ptr;
 
-    Serial.print("main_task = ");
-    Serial.flush();
-    Serial.println((uint16_t) task_main);
-    Serial.flush();
-
-    Serial.print("in tcb = ");
-    Serial.flush();
-    Serial.println((uint16_t) tcb_vec[idx_main].addr);
-    Serial.flush();
-
-    uint16_t sp = 0;
-    uint16_t a = 0;
-
-    Serial.print("&a = ");
-    Serial.flush();
-    Serial.println((uint16_t) &a);
-    Serial.flush();
-
-    asm volatile (
-        "in %A0, __SP_L__ \n\t"
-        "in %B0, __SP_H__"
-        : "=r" (sp)
-    );
-
-    Serial.print("&sp = ");
-    Serial.flush();
-    Serial.println((uint16_t) &sp);
-    Serial.flush();
-
-    Serial.print("sp = ");
-    Serial.flush();
-    Serial.println((uint16_t) sp);
-    Serial.flush();
-
-    uint16_t b = 0;
-
-    Serial.print("&b = ");
-    Serial.flush();
-    Serial.println((uint16_t) &b);
-    Serial.flush();
-
-    asm volatile (
-        "in %A0, __SP_L__ \n\t"
-        "in %B0, __SP_H__"
-        : "=r" (sp)
-    );
-
-    Serial.print("&sp = ");
-    Serial.flush();
-    Serial.println((uint16_t) &sp);
-    Serial.flush();
-
-    Serial.print("sp = ");
-    Serial.flush();
-    Serial.println((uint16_t) sp);
-    Serial.flush();
-
-    // restore_ctx();
-
-    /*
-
-    asm ("ret");
-
+    restore_ctx();
+    
+    asm volatile ("ret");
+    
     solaire_log("shit but in init_kernel", LOG_FD_STDERR);
     
     abort();
 
-    */
-   asm volatile("ret");
 }
 
 ISR(TIMER1_COMPA_vect, ISR_NAKED) {
     disable_interrupts();
-
     save_ctx();
 
-    solaire_log("Calling wake_up", LOG_FD_STDOUT);
+    toggle_led(LED1);
+    //solaire_log("Calling wake_up", LOG_FD_STDOUT);
     wake_up();
-    solaire_log("Returned from wake_up", LOG_FD_STDOUT);
-
+    //solaire_log("Returned from wake_up", LOG_FD_STDERR);
     restore_ctx();
-
-    enable_interrupts();
-
     asm volatile("reti");
 }
 
@@ -372,14 +305,14 @@ void end_cycle(void) {
 
     save_ctx();
 
-    int32_t deadline;
+    int16_t deadline;
 
     deadline = tcb_vec[idx_exe].dline;
 
     if (sys_clock < deadline) {
         insert(idx_exe, &idx_idle, TASK_STATE_IDLE);
     } else {
-        deadline += (int32_t)tcb_vec[idx_exe].period;
+        deadline += (int16_t)tcb_vec[idx_exe].period;
 
         tcb_vec[idx_exe].dline = deadline;
 
@@ -395,10 +328,10 @@ void end_cycle(void) {
     asm volatile("reti");
 }
 
-
 void activate(int16_t idx_task) {
+    ready_dirty = 1;
     if (tcb_vec[idx_task].criticality == TASK_CRIT_HARD) {
-        tcb_vec[idx_task].dline = sys_clock + (int32_t)tcb_vec[idx_task].period;
+        tcb_vec[idx_task].dline = sys_clock + (int16_t)tcb_vec[idx_task].period;
     }
 
     insert(idx_task, &idx_ready, TASK_STATE_READY);
