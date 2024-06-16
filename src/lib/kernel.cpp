@@ -28,7 +28,8 @@ int16_t sys_clock = 0; /* system's clock number of ticks since system initializa
 float time_unit;   /* time unit used for timer ticks */
 float util_fact;   /* cpu utilization factor         */
 
-unsigned long times[TIME_SIZE];
+uint16_t times[TIME_SIZE];
+uint32_t first_clk;
 uint8_t time_counter = 0;
 
 // ------------------------ Low Level Utils ------------------------
@@ -292,15 +293,14 @@ ISR(TIMER1_COMPA_vect, ISR_NAKED) {
     disable_interrupts();
     
     if (time_counter < TIME_SIZE) {
-        times[time_counter] = micros();
-        time_counter++;
+        first_clk = micros();
     }
     toggle_led(LED1);
 
     wake_up();
 
     if (time_counter < TIME_SIZE) {
-        times[time_counter] = micros();
+        times[time_counter] = (uint16_t) (micros() - first_clk);
         time_counter++;
     }
     restore_ctx();

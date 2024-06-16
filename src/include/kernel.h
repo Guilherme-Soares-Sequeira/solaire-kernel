@@ -3,7 +3,7 @@
 
 #include "include/task.h"
 
-#define TIME_SIZE 20
+#define TIME_SIZE 80
 
 /* clang-format off */
 

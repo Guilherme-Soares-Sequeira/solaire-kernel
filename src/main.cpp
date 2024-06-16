@@ -11,7 +11,7 @@
 #include "include/timer.h"
 #include "include/kernel.h"
 
-extern "C" unsigned long times[TIME_SIZE];
+extern "C" uint16_t times[TIME_SIZE];
 extern "C" uint8_t time_counter;
 
 #define TASK1_NAME "T1"
@@ -58,10 +58,10 @@ void task_main(void) {
     enable_interrupts();
 
     while (TRUE) {
-        if (time_counter >= 20) {
+        if (time_counter >= TIME_SIZE) {
             cli();
-            for (uint8_t i = 0; i < TIME_SIZE; i += 2) {
-                Serial.println((times[i+1] - times[i]));
+            for (uint8_t i = 0; i < TIME_SIZE; i ++) {
+                Serial.println(times[i]);
                 Serial.flush();
             }
             abort();
