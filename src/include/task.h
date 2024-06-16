@@ -8,22 +8,6 @@
 
 #define MAX_STR_LEN 2
 
-#define TASK1_NAME "T1"
-#define TASK2_NAME "T2"
-#define TASK3_NAME "T3"
-
-#define TASK1_PERIOD 250.0
-#define TASK2_PERIOD 500.0
-#define TASK3_PERIOD 1000.0
-
-#define TASK1_CRIT TASK_CRIT_HARD
-#define TASK2_CRIT TASK_CRIT_HARD
-#define TASK3_CRIT TASK_CRIT_HARD
-
-#define TASK1_WCET 25.0
-#define TASK2_WCET 25.0
-#define TASK3_WCET 25.0
-
 typedef enum {
     TASK_TYPE_PERIODIC = 0,
     TASK_TYPE_SPORADIC = 1,

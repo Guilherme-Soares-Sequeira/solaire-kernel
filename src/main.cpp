@@ -11,10 +11,28 @@
 #include "include/timer.h"
 #include "include/kernel.h"
 
+extern "C" unsigned long times[TIME_SIZE];
+extern "C" uint8_t time_counter;
 
-void t1(void) { while (TRUE) { toggle_led(LED1); end_cycle(); } }
-void t2(void) { while (TRUE) { toggle_led(LED2); end_cycle(); } }
-void t3(void) { while (TRUE) { toggle_led(LED3); end_cycle(); } }
+#define TASK1_NAME "T1"
+#define TASK2_NAME "T2"
+#define TASK3_NAME "T3"
+
+#define TASK1_PERIOD 250.0
+#define TASK2_PERIOD 500.0
+#define TASK3_PERIOD 1000.0
+
+#define TASK1_CRIT TASK_CRIT_HARD
+#define TASK2_CRIT TASK_CRIT_HARD
+#define TASK3_CRIT TASK_CRIT_HARD
+
+#define TASK1_WCET 25.0
+#define TASK2_WCET 25.0
+#define TASK3_WCET 25.0
+
+void t1(void) { while (TRUE) { toggle_led(LED2); end_cycle(); } }
+void t2(void) { while (TRUE) { toggle_led(LED3); end_cycle(); } }
+void t3(void) { while (TRUE) { toggle_led(LED4); end_cycle(); } }
 
 void task_main(void) {
     disable_interrupts();
@@ -40,9 +58,17 @@ void task_main(void) {
     enable_interrupts();
 
     while (TRUE) {
-        toggle_led(LED4);
-        for (uint16_t i = 0; i < 65000; i++)
+        if (time_counter >= 20) {
+            cli();
+            for (uint8_t i = 0; i < TIME_SIZE; i++) {
+                Serial.println(times[i]);
+                Serial.flush();
+            }
+            abort();
+        }
+        for (uint16_t i = 0; i < 60000; i++) {
             asm volatile("nop");
+        }
     }
 
     return;
@@ -50,9 +76,6 @@ void task_main(void) {
 
 int main(void) {
     init_kernel(TICK_DURATION_MS, task_main);
-
-    // Serial.println("busy waiting in main function...");
-    // Serial.flush();
 
     while (1) {
         asm("nop");

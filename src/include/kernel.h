@@ -3,6 +3,8 @@
 
 #include "include/task.h"
 
+#define TIME_SIZE 20
+
 /* clang-format off */
 
 #define MAX_STR_LEN      2

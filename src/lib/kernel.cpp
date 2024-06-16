@@ -28,6 +28,9 @@ int16_t sys_clock = 0; /* system's clock number of ticks since system initializa
 float time_unit;   /* time unit used for timer ticks */
 float util_fact;   /* cpu utilization factor         */
 
+unsigned long times[TIME_SIZE];
+uint8_t time_counter = 0;
+
 // ------------------------ Low Level Utils ------------------------
 
 void insert(int16_t idx_task, int16_t *queue, task_state state) {
@@ -233,7 +236,7 @@ void schedule(void) {
 void init_kernel(float tick, void (*tsk_ptr)(void)) {
     disable_interrupts();
 
-    // // Serial.begin(BAUD_RATE);
+    Serial.begin(BAUD_RATE);
 
     pinMode(LED1, OUTPUT);
     pinMode(LED2, OUTPUT);
@@ -244,8 +247,6 @@ void init_kernel(float tick, void (*tsk_ptr)(void)) {
     dig_wr(LED2, LOW);
     dig_wr(LED3, LOW);
     dig_wr(LED4, LOW);
-
-    // Serial.begin(BAUD_RATE);    
 
     // Serial.println("In init_kernel");
     // Serial.flush();
@@ -287,13 +288,24 @@ void init_kernel(float tick, void (*tsk_ptr)(void)) {
 }
 
 ISR(TIMER1_COMPA_vect, ISR_NAKED) {
+    if (time_counter < TIME_SIZE) {
+        times[time_counter] = micros();
+        time_counter++;
+    }
     disable_interrupts();
     save_ctx();
 
     toggle_led(LED1);
-    //solaire_log("Calling wake_up", LOG_FD_STDOUT);
+
     wake_up();
-    //solaire_log("Returned from wake_up", LOG_FD_STDERR);
+
+    if (time_counter < TIME_SIZE) {
+        uint8_t curr_time = TCNT0;
+        Serial.println(curr_time);
+        Serial.flush();
+        times[time_counter] = micros();
+        time_counter++;
+    }
     restore_ctx();
     asm volatile("reti");
 }
