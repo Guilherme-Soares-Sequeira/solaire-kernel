@@ -60,8 +60,8 @@ void task_main(void) {
     while (TRUE) {
         if (time_counter >= 20) {
             cli();
-            for (uint8_t i = 0; i < TIME_SIZE; i++) {
-                Serial.println(times[i]);
+            for (uint8_t i = 0; i < TIME_SIZE; i += 2) {
+                Serial.println((times[i+1] - times[i]));
                 Serial.flush();
             }
             abort();
@@ -75,6 +75,7 @@ void task_main(void) {
 }
 
 int main(void) {
+    init(); // arduino stuff
     init_kernel(TICK_DURATION_MS, task_main);
 
     while (1) {

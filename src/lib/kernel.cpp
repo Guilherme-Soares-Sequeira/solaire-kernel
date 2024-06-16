@@ -288,25 +288,23 @@ void init_kernel(float tick, void (*tsk_ptr)(void)) {
 }
 
 ISR(TIMER1_COMPA_vect, ISR_NAKED) {
+    save_ctx();
+    disable_interrupts();
+    
     if (time_counter < TIME_SIZE) {
         times[time_counter] = micros();
         time_counter++;
     }
-    disable_interrupts();
-    save_ctx();
-
     toggle_led(LED1);
 
     wake_up();
 
     if (time_counter < TIME_SIZE) {
-        uint8_t curr_time = TCNT0;
-        Serial.println(curr_time);
-        Serial.flush();
         times[time_counter] = micros();
         time_counter++;
     }
     restore_ctx();
+
     asm volatile("reti");
 }
 
